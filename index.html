@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống TK AFL</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.25/jsrsasign-all-min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div id="loading" class="loading-mask">
+        <div class="spinner"></div>
+        <p>Đang tải dữ liệu...</p>
+    </div>
+
+    <div id="dropOverlay">
+        <div class="drop-message">
+            <i data-lucide="upload-cloud" style="width: 48px; height: 48px;"></i>
+            Thả file vào đây để tải dữ liệu lên ${currentTab}
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="sidebar" id="appSidebar">
+            <div class="sidebar-header-wrapper">
+                <div class="sidebar-title">MODULES</div>
+                <button class="toggle-btn" onclick="toggleSidebar()">
+                    <i data-lucide="chevron-left" id="sidebarToggleIcon"></i>
+                </button>
+            </div>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('TK_AFL')" title="TK_AFL">
+                    <i data-lucide="users"></i>
+                    <span class="tab-text">TK_AFL</span>
+                </div>
+                <div class="tab" onclick="switchTab('DATA')" title="DATA">
+                    <i data-lucide="database"></i>
+                    <span class="tab-text">DATA</span>
+                </div>
+                <div class="tab" onclick="switchTab('DASHBOARD')" title="DASHBOARD">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span class="tab-text">DASHBOARD</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <div class="header-container">
+                <h1 id="pageTitle">HỆ THỐNG TK AFL</h1>
+                <div id="headerActions"
+                    style="display:flex; align-items:center; gap:10px; flex-grow:1; max-width:800px;">
+                    <div class="search-container">
+                        <i data-lucide="search" class="search-icon" style="width: 18px;"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="Tìm kiếm nhanh..."
+                            oninput="filterTable()">
+                    </div>
+
+                    <div id="dataFilters" style="display: none; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <input type="date" id="fromDate" class="search-input" style="width: auto; padding: 8px 10px;"
+                            onchange="filterTable()" title="Từ ngày">
+                        <span style="font-size: 0.9rem; color: #64748b; font-weight: 600;">-</span>
+                        <input type="date" id="toDate" class="search-input" style="width: auto; padding: 8px 10px;"
+                            onchange="filterTable()" title="Đến ngày">
+                        <select id="tkFilter" class="search-input" style="width: auto; padding: 8px 10px;"
+                            onchange="filterTable()">
+                            <option value="">Tất cả TK</option>
+                        </select>
+                    </div>
+
+                    <button id="addBtn" onclick="openCorrectAddModal()"
+                        style="background: #10b981; color: #fff; border:none; padding:10px 20px; border-radius:8px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; white-space:nowrap;">
+                        <i data-lucide="plus" style="width:18px;"></i> Thêm Mới
+                    </button>
+                    <input type="file" id="fileInput" hidden multiple accept=".xlsx, .xls, .csv"
+                        onchange="handleFileUpload(event)">
+                </div>
+            </div>
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <span class="stat-label">Tổng Click</span>
+                    <span class="stat-value" id="totalClick">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Tổng Đơn Hàng</span>
+                    <span class="stat-value" id="totalDonHang">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Tổng Hoa Hồng</span>
+                    <span class="stat-value" id="totalHoaHong">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Tổng Lượt Bán</span>
+                    <span class="stat-value" id="totalLuotBan">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Tổng GMV</span>
+                    <span class="stat-value" id="totalGmv">0</span>
+                </div>
+            </div>
+
+            <div class="table-wrapper" id="tableWrapper">
+                <table id="dataTable">
+                    <thead id="tableHead">
+                        <!-- Headers will be injected here -->
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+
+
+
+            <div id="pagination" class="pagination"></div>
+
+            <div id="dashboardWrapper" style="display: none; padding-top: 10px;">
+                <div class="stats-grid" id="dashStatsGrid" style="display: grid; margin-bottom: 20px;">
+                    <div class="stat-card">
+                        <span class="stat-label">Tổng Click</span>
+                        <span class="stat-value" id="dashTotalClick">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Tổng Đơn Hàng</span>
+                        <span class="stat-value" id="dashTotalDonHang">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Tổng Hoa Hồng</span>
+                        <span class="stat-value" id="dashTotalHoaHong">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Tổng GMV</span>
+                        <span class="stat-value" id="dashTotalGmv">0</span>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                    <div class="stat-card" style="padding: 20px;">
+                        <h3 style="font-size: 1rem; color: #1e293b; margin-bottom: 15px;">Xu Hướng Hoa Hồng & GMV (Theo
+                            Ngày)</h3>
+                        <div style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="padding: 20px;">
+                        <h3 style="font-size: 1rem; color: #1e293b; margin-bottom: 15px;">Top Tài Khoản (Theo Hoa Hồng)
+                        </h3>
+                        <div style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="tkPieChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="padding: 20px; grid-column: 1 / -1;">
+                        <h3 style="font-size: 1rem; color: #1e293b; margin-bottom: 15px;">Hiệu Quả Click & Đơn Hàng
+                            (Theo TK)</h3>
+                        <div style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="tkBarChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="addModal"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div
+            style="background: white; padding: 25px; border-radius: 12px; width: 400px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
+            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới Dữ Liệu DATA</h2>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Ngày
+                        *</label>
+                    <input type="date" id="addNgay" class="search-input" style="width: 100%;">
+                </div>
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">TK
+                        *</label>
+                    <select id="addTk" class="search-input" style="width: 100%;">
+                        <option value="">-- Đang tải TK... --</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label
+                            style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Click</label>
+                        <input type="number" id="addClick" class="search-input" style="width: 100%;" placeholder="0">
+                    </div>
+                    <div style="flex: 1;">
+                        <label
+                            style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Lượt
+                            Bán</label>
+                        <input type="number" id="addLuotBan" class="search-input" style="width: 100%;" placeholder="0">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label
+                            style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Đơn
+                            Hàng</label>
+                        <input type="number" id="addDonHang" class="search-input" style="width: 100%;" placeholder="0">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label
+                            style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Hoa
+                            Hồng</label>
+                        <input type="number" id="addHoaHong" class="search-input" style="width: 100%;" placeholder="0">
+                    </div>
+                    <div style="flex: 1;">
+                        <label
+                            style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">GMV</label>
+                        <input type="number" id="addGmv" class="search-input" style="width: 100%;" placeholder="0">
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
+                <button onclick="closeAddModal()"
+                    style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
+                <button onclick="saveAddData()"
+                    style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addModalAFL"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 25px; border-radius: 12px; width: 400px; max-width: 90%;">
+            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới TK AFL</h2>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">ID
+                        *</label>
+                    <input type="text" id="addAflId" class="search-input" style="width: 100%;" placeholder="Nhập ID...">
+                </div>
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Tên
+                        *</label>
+                    <input type="text" id="addAflTen" class="search-input" style="width: 100%;"
+                        placeholder="Nhập tên...">
+                </div>
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Mail</label>
+                    <input type="text" id="addAflMail" class="search-input" style="width: 100%;"
+                        placeholder="Nhập mail...">
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
+                <button onclick="closeAddModalAFL()"
+                    style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
+                <button onclick="saveAddDataAFL()"
+                    style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
