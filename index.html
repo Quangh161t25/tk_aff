@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống TK AFL</title>
+    <title>Hệ Thống TK AFF</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.25/jsrsasign-all-min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -30,30 +30,34 @@
     <div class="main-layout">
         <div class="sidebar" id="appSidebar">
             <div class="sidebar-header-wrapper">
-                <div class="sidebar-title">MODULES</div>
+                <div class="sidebar-title">AFF ĐỨC</div>
                 <button class="toggle-btn" onclick="toggleSidebar()">
                     <i data-lucide="chevron-left" id="sidebarToggleIcon"></i>
                 </button>
             </div>
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('TK_AFL')" title="TK_AFL">
+                <div class="tab active" onclick="switchTab('DASHBOARD')" title="DASHBOARD">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span class="tab-text">DASHBOARD</span>
+                </div>
+                <div class="tab" onclick="switchTab('TK_AFF')" title="TK_AFF">
                     <i data-lucide="users"></i>
-                    <span class="tab-text">TK_AFL</span>
+                    <span class="tab-text">TK_AFF</span>
                 </div>
                 <div class="tab" onclick="switchTab('DATA')" title="DATA">
                     <i data-lucide="database"></i>
                     <span class="tab-text">DATA</span>
                 </div>
-                <div class="tab" onclick="switchTab('DASHBOARD')" title="DASHBOARD">
-                    <i data-lucide="layout-dashboard"></i>
-                    <span class="tab-text">DASHBOARD</span>
+                <div class="tab" onclick="switchTab('PAY')" title="PAY">
+                    <i data-lucide="credit-card"></i>
+                    <span class="tab-text">PAY</span>
                 </div>
             </div>
         </div>
 
         <div class="content-area">
             <div class="header-container">
-                <h1 id="pageTitle">HỆ THỐNG TK AFL</h1>
+                <h1 id="pageTitle">HỆ THỐNG TK AFF</h1>
                 <div id="headerActions"
                     style="display:flex; align-items:center; gap:10px; flex-grow:1; max-width:800px;">
                     <div class="search-container">
@@ -62,13 +66,16 @@
                             oninput="filterTable()">
                     </div>
 
-                    <div id="dataFilters" style="display: none; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <input type="date" id="fromDate" class="search-input" style="width: auto; padding: 8px 10px;"
-                            onchange="filterTable()" title="Từ ngày">
-                        <span style="font-size: 0.9rem; color: #64748b; font-weight: 600;">-</span>
-                        <input type="date" id="toDate" class="search-input" style="width: auto; padding: 8px 10px;"
-                            onchange="filterTable()" title="Đến ngày">
-                        <select id="tkFilter" class="search-input" style="width: auto; padding: 8px 10px;"
+                    <div id="dataFilters" style="display: none; align-items: center; gap: 8px; flex-shrink: 0;">
+                        <input type="date" id="fromDate" class="search-input"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="filterTable()"
+                            title="Từ ngày">
+                        <span style="font-size: 0.9rem; color: #64748b;">-</span>
+                        <input type="date" id="toDate" class="search-input"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="filterTable()"
+                            title="Đến ngày">
+                        <select id="tkFilter" class="search-input"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem; max-width: 150px;"
                             onchange="filterTable()">
                             <option value="">Tất cả TK</option>
                         </select>
@@ -84,25 +91,29 @@
             </div>
 
             <div class="stats-grid" id="statsGrid">
-                <div class="stat-card">
+                <div class="stat-card" id="statClick">
                     <span class="stat-label">Tổng Click</span>
                     <span class="stat-value" id="totalClick">0</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statDonHang">
                     <span class="stat-label">Tổng Đơn Hàng</span>
                     <span class="stat-value" id="totalDonHang">0</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statHoaHong">
                     <span class="stat-label">Tổng Hoa Hồng</span>
                     <span class="stat-value" id="totalHoaHong">0</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statLuotBan" style="display: none;">
                     <span class="stat-label">Tổng Lượt Bán</span>
                     <span class="stat-value" id="totalLuotBan">0</span>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statGmv" style="display: none;">
                     <span class="stat-label">Tổng GMV</span>
                     <span class="stat-value" id="totalGmv">0</span>
+                </div>
+                <div class="stat-card" id="statPay" style="display: none;">
+                    <span class="stat-label">Tổng Chi Trả (PAY)</span>
+                    <span class="stat-value" id="totalPay">0</span>
                 </div>
             </div>
 
@@ -139,6 +150,10 @@
                         <span class="stat-label">Tổng GMV</span>
                         <span class="stat-value" id="dashTotalGmv">0</span>
                     </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Tổng PAY</span>
+                        <span class="stat-value" id="dashTotalPay">0</span>
+                    </div>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
@@ -154,6 +169,13 @@
                         </h3>
                         <div style="position: relative; height: 300px; width: 100%;">
                             <canvas id="tkPieChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="padding: 20px;">
+                        <h3 style="font-size: 1rem; color: #1e293b; margin-bottom: 15px;">Phân Loại Hoa Hồng (Nguồn)
+                        </h3>
+                        <div style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="hhTypeChart"></canvas>
                         </div>
                     </div>
                     <div class="stat-card" style="padding: 20px; grid-column: 1 / -1;">
@@ -283,35 +305,77 @@
     </div>
     </div>
 
-    <div id="addModalAFL"
+    <div id="addModalAFF"
         style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
         <div style="background: white; padding: 25px; border-radius: 12px; width: 400px; max-width: 90%;">
-            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới TK AFL</h2>
+            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới TK AFF</h2>
             <div style="display: flex; flex-direction: column; gap: 15px;">
                 <div>
                     <label
                         style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">ID
                         *</label>
-                    <input type="text" id="addAflId" class="search-input" style="width: 100%;" placeholder="Nhập ID...">
+                    <input type="text" id="addAFFId" class="search-input" style="width: 100%;" placeholder="Nhập ID...">
                 </div>
                 <div>
                     <label
                         style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Tên
                         *</label>
-                    <input type="text" id="addAflTen" class="search-input" style="width: 100%;"
+                    <input type="text" id="addAFFTen" class="search-input" style="width: 100%;"
                         placeholder="Nhập tên...">
                 </div>
                 <div>
                     <label
                         style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Mail</label>
-                    <input type="text" id="addAflMail" class="search-input" style="width: 100%;"
+                    <input type="text" id="addAFFMail" class="search-input" style="width: 100%;"
                         placeholder="Nhập mail...">
                 </div>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
-                <button onclick="closeAddModalAFL()"
+                <button onclick="closeAddModalAFF()"
                     style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
-                <button onclick="saveAddDataAFL()"
+                <button onclick="saveAddDataAFF()"
+                    style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Thêm Mới PAY -->
+    <div id="addModalPay"
+        style="display: none; position: fixed; inset: 0; background: #fff; z-index: 1000; align-items: stretch; justify-content: stretch;">
+        <div
+            style="background: white; padding: 25px; width: 100%; height: 100%; display: flex; flex-direction: column; overflow-y: auto;">
+            <h2 id="payModalTitle"
+                style="margin-bottom: 25px; color: var(--primary); font-size: 1.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
+                Thêm Mới PAY</h2>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Ngày
+                        *</label>
+                    <input type="date" id="payNgay" class="search-input" style="width: 100%;">
+                </div>
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">TK
+                        *</label>
+                    <select id="payTk" class="search-input" style="width: 100%;">
+                        <option value="">-- Đang tải TK... --</option>
+                    </select>
+                </div>
+                <div>
+                    <label
+                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Số
+                        Tiền *</label>
+                    <input type="text" id="paySoTien" class="search-input"
+                        style="width: 100%; font-weight: 700; color: #10b981;" placeholder="0"
+                        oninput="formatInput(this)">
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 25px; gap: 10px;">
+                <button onclick="closeAddModalPay()"
+                    style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
+                <button id="paySaveBtn" onclick="saveAddDataPay()"
                     style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
             </div>
         </div>

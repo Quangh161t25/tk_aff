@@ -44,9 +44,9 @@ sR2Sh8e3h3Knd6j1tceRIFU=
 -----END PRIVATE KEY-----`,
     tokenUrl: "https://oauth2.googleapis.com/token",
     tabs: {
-        'TK_AFL': {
-            range: 'TK_AFL!A2:C',
-            clearRange: 'TK_AFL!A2:C10000',
+        'TK_AFF': {
+            range: 'TK_AFF!A2:C',
+            clearRange: 'TK_AFF!A2:C10000',
             headers: ['id', 'ten', 'mail'],
             priceCols: [],
             imgCol: -1
@@ -59,6 +59,14 @@ sR2Sh8e3h3Knd6j1tceRIFU=
             priceCols: [5, 6, 7, 8, 10], // hoa_hong, video, live, mxh, gmv
             imgCol: -1
         },
+        'PAY': {
+            range: 'PAY!A2:D',
+            clearRange: 'PAY!A2:D10000',
+            headers: ['id', 'ngay', 'tk', 'so_tien'],
+            visibleCols: [1, 2, 3],
+            priceCols: [3],
+            imgCol: -1
+        },
         'DASHBOARD': {
             range: 'DATA!A2:L'
         }
@@ -68,10 +76,10 @@ sR2Sh8e3h3Knd6j1tceRIFU=
 // Đọc tham số ?up= từ URL của trang này (ví dụ: sp_pm_joy.html?up=txx1)
 const UP_PARAM = new URLSearchParams(window.location.search).get('up') || '';
 
-const JOY_TAB_STORAGE_KEY = 'aflActiveTab';
-const JOY_VALID_TABS = ['TK_AFL', 'DATA', 'DASHBOARD'];
+const JOY_TAB_STORAGE_KEY = 'AFFActiveTab';
+const JOY_VALID_TABS = ['TK_AFF', 'DATA', 'DASHBOARD', 'PAY'];
 
-let currentTab = 'TK_AFL', allData = [], accessToken = null, tokenExpiry = 0;
+let currentTab = 'DASHBOARD', allData = [], accessToken = null, tokenExpiry = 0;
 let currentPage = 1, rowsPerPage = 100, filteredData = [];
 let editingSheetRow = null;
 let pendingData = [];
@@ -97,9 +105,10 @@ async function switchTab(tabName) {
     const uploadBtn = document.getElementById('uploadBtn');
     const statsGrid = document.getElementById('statsGrid');
     const tabLabels = {
-        'TK_AFL': 'TK_AFL',
+        'TK_AFF': 'TK_AFF',
         'DATA': 'DATA',
-        'DASHBOARD': 'DASHBOARD'
+        'DASHBOARD': 'DASHBOARD',
+        'PAY': 'PAY'
     };
 
     document.querySelectorAll('.tab').forEach(t => {
@@ -130,8 +139,35 @@ async function switchTab(tabName) {
         if (addBtn) addBtn.style.display = 'flex';
     }
 
-    if (statsGrid) {
-        statsGrid.style.display = (tabName === 'DATA') ? 'grid' : 'none';
+    const statClick = document.getElementById('statClick');
+    const statDonHang = document.getElementById('statDonHang');
+    const statHoaHong = document.getElementById('statHoaHong');
+    const statLuotBan = document.getElementById('statLuotBan');
+    const statGmv = document.getElementById('statGmv');
+    const statPay = document.getElementById('statPay');
+    const dataFilters = document.getElementById('dataFilters');
+
+    if (tabName === 'DATA') {
+        if (statsGrid) statsGrid.style.display = 'grid';
+        if (statClick) statClick.style.display = 'block';
+        if (statDonHang) statDonHang.style.display = 'block';
+        if (statHoaHong) statHoaHong.style.display = 'block';
+        if (statLuotBan) statLuotBan.style.display = 'block';
+        if (statGmv) statGmv.style.display = 'block';
+        if (statPay) statPay.style.display = 'none';
+        if (dataFilters) dataFilters.style.display = 'flex';
+    } else if (tabName === 'PAY') {
+        if (statsGrid) statsGrid.style.display = 'grid';
+        if (statClick) statClick.style.display = 'none';
+        if (statDonHang) statDonHang.style.display = 'none';
+        if (statHoaHong) statHoaHong.style.display = 'none';
+        if (statLuotBan) statLuotBan.style.display = 'none';
+        if (statGmv) statGmv.style.display = 'none';
+        if (statPay) statPay.style.display = 'block';
+        if (dataFilters) dataFilters.style.display = 'flex';
+    } else {
+        if (statsGrid) statsGrid.style.display = 'none';
+        if (dataFilters) dataFilters.style.display = tabName === 'DASHBOARD' ? 'flex' : 'none';
     }
 
     const dashboardWrapper = document.getElementById('dashboardWrapper');
@@ -139,13 +175,9 @@ async function switchTab(tabName) {
         dashboardWrapper.style.display = tabName === 'DASHBOARD' ? 'block' : 'none';
     }
 
-    const dataFilters = document.getElementById('dataFilters');
-    if (dataFilters) {
-        dataFilters.style.display = (tabName === 'DATA' || tabName === 'DASHBOARD') ? 'flex' : 'none';
-    }
-
-    pageTitle.innerText = tabName === 'TK_AFL' ? 'QUẢN LÝ TK AFL' :
-        tabName === 'DASHBOARD' ? 'DASHBOARD TỔNG QUAN' : 'DỮ LIỆU AFL';
+    pageTitle.innerText = tabName === 'TK_AFF' ? 'QUẢN LÝ TK AFF' :
+        tabName === 'DASHBOARD' ? 'DASHBOARD TỔNG QUAN' :
+            tabName === 'PAY' ? 'QUẢN LÝ CHI TRẢ (PAY)' : 'DỮ LIỆU AFF';
 
     document.getElementById('searchInput').value = '';
     currentPage = 1;
@@ -163,16 +195,16 @@ async function fetchData() {
         const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${tabConfig.range}`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
 
-        // Fetch account names for mapping if in DATA or DASHBOARD
-        let aflNamesMap = {};
-        if (currentTab === 'DATA' || currentTab === 'DASHBOARD') {
+        // Fetch account names for mapping if in DATA, DASHBOARD or PAY
+        let AFFNamesMap = {};
+        if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
             try {
-                const aflRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFL!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
-                const aflData = await aflRes.json();
-                (aflData.values || []).forEach(r => {
-                    if (r[0]) aflNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
+                const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
+                const AFFData = await AFFRes.json();
+                (AFFData.values || []).forEach(r => {
+                    if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
                 });
-                window._aflNamesMap = aflNamesMap; // Cache globally
+                window._AFFNamesMap = AFFNamesMap; // Cache globally
             } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
         }
         const rawRows = data.values || [];
@@ -181,7 +213,19 @@ async function fetchData() {
             arr._sheetRow = i + 2;
             return arr;
         });
-        if (currentTab === 'DATA' || currentTab === 'DASHBOARD') {
+
+        if (currentTab === 'DASHBOARD') {
+            try {
+                const payRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:D`, { headers: { Authorization: `Bearer ${token}` } });
+                const payData = await payRes.json();
+                window._allPayData = (payData.values || []).map((row, i) => {
+                    const arr = Array.isArray(row) ? row.slice() : [];
+                    arr._sheetRow = i + 2;
+                    return arr;
+                });
+            } catch (e) { console.warn("Không tải được dữ liệu PAY cho Dashboard:", e); }
+        }
+        if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
             allData.sort((a, b) => {
                 const tA = parseNgayForSort(a[1]);
                 const tB = parseNgayForSort(b[1]);
@@ -192,7 +236,7 @@ async function fetchData() {
             if (tkSelect) {
                 const uniqueTks = [...new Set(allData.map(r => String(r[2] || '').trim()).filter(Boolean))].sort();
                 const currentValue = tkSelect.value;
-                const namesMap = window._aflNamesMap || {};
+                const namesMap = window._AFFNamesMap || {};
                 tkSelect.innerHTML = '<option value="">Tất cả TK</option>' +
                     uniqueTks.map(tk => {
                         const displayName = namesMap[tk] ? `${tk} - ${namesMap[tk]}` : tk;
@@ -217,10 +261,11 @@ async function fetchData() {
     }
 }
 
-let dTrendChart, dTkPieChart, dTkBarChart;
+let dTrendChart, dTkPieChart, dTkBarChart, dHhTypeChart;
 
-function renderDashboard(dataData) {
-    let tClick = 0, tDonHang = 0, tHoaHong = 0, tGmv = 0;
+function renderDashboard(dataData, payData = []) {
+    let tClick = 0, tDonHang = 0, tHoaHong = 0, tGmv = 0, tPay = 0;
+    let tHhVideo = 0, tHhLive = 0, tHhMxh = 0;
     const dateMap = {};
     const tkMap = {};
 
@@ -230,9 +275,13 @@ function renderDashboard(dataData) {
         const click = Number(String(row[3] || '').replace(/[^0-9.-]+/g, "")) || 0;
         const donHang = Number(String(row[4] || '').replace(/[^0-9.-]+/g, "")) || 0;
         const hoaHong = Number(String(row[5] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        const hhVideo = Number(String(row[6] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        const hhLive = Number(String(row[7] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        const hhMxh = Number(String(row[8] || '').replace(/[^0-9.-]+/g, "")) || 0;
         const gmv = Number(String(row[10] || '').replace(/[^0-9.-]+/g, "")) || 0;
 
         tClick += click; tDonHang += donHang; tHoaHong += hoaHong; tGmv += gmv;
+        tHhVideo += hhVideo; tHhLive += hhLive; tHhMxh += hhMxh;
 
         if (ngayStr) {
             if (!dateMap[ngayStr]) dateMap[ngayStr] = { hoaHong: 0, gmv: 0 };
@@ -246,10 +295,16 @@ function renderDashboard(dataData) {
         tkMap[tkStr].donHang += donHang;
     });
 
+    payData.forEach(row => {
+        const soTien = Number(String(row[3] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        tPay += soTien;
+    });
+
     document.getElementById('dashTotalClick').innerText = tClick.toLocaleString('vi-VN');
     document.getElementById('dashTotalDonHang').innerText = tDonHang.toLocaleString('vi-VN');
     document.getElementById('dashTotalHoaHong').innerText = formatCurrency(tHoaHong);
     document.getElementById('dashTotalGmv').innerText = formatCurrency(tGmv);
+    document.getElementById('dashTotalPay').innerText = formatCurrency(tPay);
 
     const rawDateKeys = Object.keys(dateMap).sort((a, b) => parseNgayForSort(a) - parseNgayForSort(b));
     const dateKeys = rawDateKeys.slice(-30);
@@ -273,7 +328,7 @@ function renderDashboard(dataData) {
 
     const allTks = Object.keys(tkMap).sort((a, b) => tkMap[b].hoaHong - tkMap[a].hoaHong);
     const top10Keys = allTks.slice(0, 10);
-    const namesMap = window._aflNamesMap || {};
+    const namesMap = window._AFFNamesMap || {};
 
     const tkLabels = top10Keys.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
     const tkHoaHongValues = top10Keys.map(k => tkMap[k].hoaHong);
@@ -342,6 +397,22 @@ function renderDashboard(dataData) {
                 { label: 'Click', data: tkClickValues, backgroundColor: '#3b82f6' },
                 { label: 'Đơn Hàng', data: tkDonHangValues, backgroundColor: '#10b981' }
             ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // New Chart: Commission Type Breakdown
+    if (dHhTypeChart) dHhTypeChart.destroy();
+    const ctxHhType = document.getElementById('hhTypeChart').getContext('2d');
+    dHhTypeChart = new Chart(ctxHhType, {
+        type: 'doughnut',
+        data: {
+            labels: ['Video', 'Live', 'MXH'],
+            datasets: [{
+                data: [tHhVideo, tHhLive, tHhMxh],
+                backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6'],
+                hoverOffset: 4
+            }]
         },
         options: { responsive: true, maintainAspectRatio: false }
     });
@@ -510,6 +581,12 @@ function renderTable() {
         document.getElementById('totalHoaHong').innerText = formatCurrency(totals.hoaHong);
         document.getElementById('totalLuotBan').innerText = totals.luotBan.toLocaleString('vi-VN');
         document.getElementById('totalGmv').innerText = formatCurrency(totals.gmv);
+    } else if (currentTab === 'PAY') {
+        let totalPay = 0;
+        filteredData.forEach(row => {
+            totalPay += Number(String(row[3] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        });
+        document.getElementById('totalPay').innerText = formatCurrency(totalPay);
     }
 
     const tbody = document.getElementById('tableBody');
@@ -558,8 +635,10 @@ function handleEditRow(sheetRow) {
     editingSheetRow = sheetRow;
     if (currentTab === 'DATA') {
         openAddModal(rowData);
+    } else if (currentTab === 'PAY') {
+        openAddModalPay(rowData);
     } else {
-        openAddModalAFL(rowData);
+        openAddModalAFF(rowData);
     }
 
     renderPagination();
@@ -624,7 +703,19 @@ function filterTable() {
     });
 
     if (currentTab === 'DASHBOARD') {
-        renderDashboard(filteredData);
+        const filteredPay = (window._allPayData || []).filter(row => {
+            const matchTerm = !term ? true : row.some(cell => String(cell).toLowerCase().includes(term));
+            if (fromDateTS !== -Infinity || toDateTS !== Infinity) {
+                const rowDateTS = parseNgayForSort(row[1]);
+                if (rowDateTS < fromDateTS || rowDateTS > toDateTS) return false;
+            }
+            if (tkTerm) {
+                const rowTk = String(row[2] || '').toLowerCase();
+                if (rowTk !== tkTerm) return false;
+            }
+            return matchTerm;
+        });
+        renderDashboard(filteredData, filteredPay);
     } else {
         currentPage = 1;
         renderTable();
@@ -733,40 +824,42 @@ function openCorrectAddModal() {
     editingSheetRow = null;
     if (currentTab === 'DATA') {
         openAddModal();
+    } else if (currentTab === 'PAY') {
+        openAddModalPay();
     } else {
-        openAddModalAFL();
+        openAddModalAFF();
     }
 }
 
-function openAddModalAFL(editData = null) {
-    document.getElementById('addModalAFL').style.display = 'flex';
-    const title = document.querySelector('#addModalAFL h2');
-    const saveBtn = document.querySelector('#addModalAFL button[onclick="saveAddDataAFL()"]');
+function openAddModalAFF(editData = null) {
+    document.getElementById('addModalAFF').style.display = 'flex';
+    const title = document.querySelector('#addModalAFF h2');
+    const saveBtn = document.querySelector('#addModalAFF button[onclick="saveAddDataAFF()"]');
 
     if (editData) {
-        title.innerText = 'Sửa TK AFL';
+        title.innerText = 'Sửa TK AFF';
         saveBtn.innerText = 'Cập Nhật';
-        document.getElementById('addAflId').value = editData[0] || '';
-        document.getElementById('addAflTen').value = editData[1] || '';
-        document.getElementById('addAflMail').value = editData[2] || '';
+        document.getElementById('addAFFId').value = editData[0] || '';
+        document.getElementById('addAFFTen').value = editData[1] || '';
+        document.getElementById('addAFFMail').value = editData[2] || '';
     } else {
-        title.innerText = 'Thêm Mới TK AFL';
+        title.innerText = 'Thêm Mới TK AFF';
         saveBtn.innerText = 'Lưu';
-        document.getElementById('addAflId').value = '';
-        document.getElementById('addAflTen').value = '';
-        document.getElementById('addAflMail').value = '';
+        document.getElementById('addAFFId').value = '';
+        document.getElementById('addAFFTen').value = '';
+        document.getElementById('addAFFMail').value = '';
     }
 }
 
-function closeAddModalAFL() {
-    document.getElementById('addModalAFL').style.display = 'none';
+function closeAddModalAFF() {
+    document.getElementById('addModalAFF').style.display = 'none';
     editingSheetRow = null;
 }
 
-async function saveAddDataAFL() {
-    const id = document.getElementById('addAflId').value.trim();
-    const ten = document.getElementById('addAflTen').value.trim();
-    const mail = document.getElementById('addAflMail').value.trim();
+async function saveAddDataAFF() {
+    const id = document.getElementById('addAFFId').value.trim();
+    const ten = document.getElementById('addAFFTen').value.trim();
+    const mail = document.getElementById('addAFFMail').value.trim();
 
     if (!id || !ten) {
         alert("Vui lòng nhập ID và Tên.");
@@ -774,21 +867,21 @@ async function saveAddDataAFL() {
     }
 
     document.getElementById('loading').style.display = 'flex';
-    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật TK AFL...` : `Đang thêm TK AFL...`;
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật TK AFF...` : `Đang thêm TK AFF...`;
     try {
         const token = await getAccessToken();
         const newRow = [id, ten, mail];
 
         let res;
         if (editingSheetRow) {
-            const range = `TK_AFL!A${editingSheetRow}:C${editingSheetRow}`;
+            const range = `TK_AFF!A${editingSheetRow}:C${editingSheetRow}`;
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: [newRow] })
             });
         } else {
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFL!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: [newRow] })
@@ -800,8 +893,8 @@ async function saveAddDataAFL() {
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert(editingSheetRow ? "Cập nhật TK AFL thành công!" : "Thêm TK AFL thành công!");
-        closeAddModalAFL();
+        alert(editingSheetRow ? "Cập nhật TK AFF thành công!" : "Thêm TK AFF thành công!");
+        closeAddModalAFF();
         await fetchData();
     } catch (err) {
         console.error(err);
@@ -821,7 +914,7 @@ async function openAddModal(editData = null) {
 
     try {
         const token = await getAccessToken();
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFL!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
         const opts = (data.values || []).map(r => {
             const id = String(r[0] || '').trim();
@@ -886,6 +979,7 @@ function addCurrentToPending() {
     }
 
     const ngay = document.getElementById('addNgay').value;
+    const tk = document.getElementById('addTk').value.trim();
     const click = cleanNumber(document.getElementById('addClick').value);
     const donHang = cleanNumber(document.getElementById('addDonHang').value);
     const luotBan = cleanNumber(document.getElementById('addLuotBan').value);
@@ -1054,7 +1148,7 @@ async function saveAddData() {
     try {
         let res;
         if (editingSheetRow) {
-            const range = `DATA!A${editingSheetRow}:I${editingSheetRow}`;
+            const range = `DATA!A${editingSheetRow}:L${editingSheetRow}`;
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -1078,6 +1172,116 @@ async function saveAddData() {
         await fetchData();
     } catch (err) {
         console.error(err);
+        alert("Lỗi: " + err.message);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+async function openAddModalPay(editData = null) {
+    document.getElementById('addModalPay').style.display = 'flex';
+    const selectTk = document.getElementById('payTk');
+    selectTk.innerHTML = '<option value="">-- Đang tải TK... --</option>';
+
+    try {
+        const token = await getAccessToken();
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const accounts = data.values || [];
+        selectTk.innerHTML = '<option value="">Chọn Tài Khoản...</option>';
+        accounts.forEach(acc => {
+            const val = `${acc[0]} - ${acc[1]}`;
+            selectTk.innerHTML += `<option value="${val}">${val}</option>`;
+        });
+
+        const title = document.getElementById('payModalTitle');
+        const saveBtn = document.getElementById('paySaveBtn');
+
+        if (editData) {
+            editingSheetRow = editData._sheetRow;
+            title.innerText = 'Sửa Dữ Liệu PAY';
+            saveBtn.innerText = 'Cập Nhật';
+
+            if (editData[1]) {
+                const parts = editData[1].split('/');
+                if (parts.length === 3) {
+                    document.getElementById('payNgay').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                } else {
+                    document.getElementById('payNgay').value = editData[1];
+                }
+            }
+            selectTk.value = editData[2] || '';
+            document.getElementById('paySoTien').value = (Number(editData[3]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+        } else {
+            title.innerText = 'Thêm Mới Dữ Liệu PAY';
+            saveBtn.innerText = 'Lưu';
+            document.getElementById('payNgay').value = new Date().toISOString().split('T')[0];
+            document.getElementById('paySoTien').value = '';
+        }
+    } catch (e) { console.error(e); }
+}
+
+function closeAddModalPay() {
+    document.getElementById('addModalPay').style.display = 'none';
+    editingSheetRow = null;
+}
+
+async function saveAddDataPay() {
+    const ngay = document.getElementById('payNgay').value;
+    const tk = document.getElementById('payTk').value.trim();
+    const soTien = cleanNumber(document.getElementById('paySoTien').value);
+
+    if (!ngay || !tk) {
+        alert("Vui lòng nhập Ngày và TK.");
+        return;
+    }
+
+    const d = new Date(ngay);
+    const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+    document.getElementById('loading').style.display = 'flex';
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật...` : `Đang lưu...`;
+
+    try {
+        const token = await getAccessToken();
+        let nextId;
+
+        if (editingSheetRow) {
+            const rowData = allData.find(r => r._sheetRow === editingSheetRow);
+            nextId = rowData[0];
+        } else {
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+            const idData = await idRes.json();
+            const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
+            nextId = ids.length ? Math.max(...ids) + 1 : 1;
+        }
+
+        const newRow = [nextId, ngayFormat, tk, soTien];
+
+        let res;
+        if (editingSheetRow) {
+            const range = `PAY!A${editingSheetRow}:D${editingSheetRow}`;
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        } else {
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        }
+
+        if (!res.ok) throw new Error("Lỗi cập nhật API");
+
+        alert("Thành công!");
+        closeAddModalPay();
+        await fetchData();
+    } catch (err) {
         alert("Lỗi: " + err.message);
     } finally {
         document.getElementById('loading').style.display = 'none';
