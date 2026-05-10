@@ -74,6 +74,7 @@ const JOY_VALID_TABS = ['TK_AFL', 'DATA', 'DASHBOARD'];
 let currentTab = 'TK_AFL', allData = [], accessToken = null, tokenExpiry = 0;
 let currentPage = 1, rowsPerPage = 100, filteredData = [];
 let editingSheetRow = null;
+let pendingData = [];
 /** Map tên tab (tên sheet) → sheetId Google, cache nhẹ cho batchUpdate */
 let sheetTitleToIdCache = null;
 
@@ -869,9 +870,15 @@ async function openAddModal(editData = null) {
 function closeAddModal() {
     document.getElementById('addModal').style.display = 'none';
     editingSheetRow = null;
+    clearPendingData();
 }
 
-async function saveAddData() {
+function addCurrentToPending() {
+    if (editingSheetRow) {
+        alert("Không thể thêm vào danh sách khi đang ở chế độ sửa dòng.");
+        return;
+    }
+
     const ngay = document.getElementById('addNgay').value;
     const tk = document.getElementById('addTk').value.trim();
     const click = document.getElementById('addClick').value || 0;
@@ -889,41 +896,142 @@ async function saveAddData() {
     const nam_thang = `${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
     const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
-    document.getElementById('loading').style.display = 'flex';
-    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật dữ liệu...` : `Đang thêm dữ liệu...`;
-    try {
-        const token = await getAccessToken();
-        let nextId;
+    // Collect data object
+    const entry = {
+        ngay, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang
+    };
 
-        if (editingSheetRow) {
-            const rowData = allData.find(r => r._sheetRow === editingSheetRow);
-            nextId = rowData[0]; // Keep existing ID
-        } else {
-            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+    pendingData.push(entry);
+    updatePendingUI();
+
+    // Increment date for convenience
+    const nextDate = new Date(ngay);
+    nextDate.setDate(nextDate.getDate() + 1);
+    document.getElementById('addNgay').value = nextDate.toISOString().split('T')[0];
+
+    // Reset numeric fields
+    document.getElementById('addClick').value = '';
+    document.getElementById('addLuotBan').value = '';
+    document.getElementById('addDonHang').value = '';
+    document.getElementById('addHoaHong').value = '';
+    document.getElementById('addGmv').value = '';
+}
+
+function updatePendingUI() {
+    const container = document.getElementById('pendingRowsContainer');
+    const list = document.getElementById('pendingRowsList');
+    const count = document.getElementById('pendingCount');
+    const mainSaveBtn = document.getElementById('mainSaveBtn');
+
+    if (pendingData.length > 0) {
+        container.style.display = 'block';
+        count.innerText = pendingData.length;
+        mainSaveBtn.innerText = `Lưu (${pendingData.length} dòng)`;
+
+        list.innerHTML = pendingData.map((item, idx) => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 6px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; margin-bottom:2px; border-radius:4px;">
+                <span><b>${item.ngayFormat}</b> - ${item.tk} (Click: ${item.click})</span>
+                <button onclick="removePendingRow(${idx})" style="color:#ef4444; border:none; background:none; cursor:pointer; font-weight:700;">×</button>
+            </div>
+        `).join('');
+    } else {
+        container.style.display = 'none';
+        count.innerText = '0';
+        mainSaveBtn.innerText = 'Lưu';
+        list.innerHTML = '';
+    }
+}
+
+function removePendingRow(index) {
+    pendingData.splice(index, 1);
+    updatePendingUI();
+}
+
+function clearPendingData() {
+    pendingData = [];
+    updatePendingUI();
+}
+
+async function saveAddData() {
+    const token = await getAccessToken();
+    let rowsToSave = [];
+
+    // Nếu có danh sách tạm chờ, ưu tiên lưu danh sách đó
+    if (pendingData.length > 0 && !editingSheetRow) {
+        if (!confirm(`Lưu tất cả ${pendingData.length} dòng dữ liệu đã nhập?`)) return;
+
+        document.getElementById('loading').style.display = 'flex';
+        document.querySelector('#loading p').innerText = `Đang lấy ID và chuẩn bị dữ liệu...`;
+
+        try {
+            // Lấy ID cuối cùng một lần duy nhất
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
             const idData = await idRes.json();
             const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
-            nextId = ids.length ? Math.max(...ids) + 1 : 1;
+            let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
+
+            rowsToSave = pendingData.map(item => {
+                const row = [currentNextId, item.ngayFormat, item.tk, item.click, item.donHang, item.hoaHong, item.luotBan, item.gmv, item.nam_thang];
+                currentNextId++;
+                return row;
+            });
+        } catch (e) {
+            alert("Lỗi khi lấy ID: " + e.message);
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+    } else {
+        // Lưu duy nhất dòng đang có trên form
+        const ngay = document.getElementById('addNgay').value;
+        const tk = document.getElementById('addTk').value.trim();
+        const click = document.getElementById('addClick').value || 0;
+        const luotBan = document.getElementById('addLuotBan').value || 0;
+        const donHang = document.getElementById('addDonHang').value || 0;
+        const hoaHong = document.getElementById('addHoaHong').value || 0;
+        const gmv = document.getElementById('addGmv').value || 0;
+
+        if (!ngay || !tk) {
+            alert("Vui lòng nhập Ngày và TK.");
+            return;
         }
 
-        const newRow = [
-            nextId, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang
-        ];
+        const d = new Date(ngay);
+        const nam_thang = `${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+        const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
+        let nextId;
+        if (editingSheetRow) {
+            const rowData = allData.find(r => r._sheetRow === editingSheetRow);
+            nextId = rowData[0]; // Giữ ID cũ khi sửa
+        } else {
+            try {
+                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+                const idData = await idRes.json();
+                const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
+                nextId = ids.length ? Math.max(...ids) + 1 : 1;
+            } catch (e) { nextId = 1; }
+        }
+
+        rowsToSave = [[nextId, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang]];
+    }
+
+    document.getElementById('loading').style.display = 'flex';
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật dữ liệu...` : `Đang lưu ${rowsToSave.length} dòng...`;
+
+    try {
         let res;
         if (editingSheetRow) {
             const range = `DATA!A${editingSheetRow}:I${editingSheetRow}`;
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: [newRow] })
+                body: JSON.stringify({ values: rowsToSave })
             });
         } else {
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: [newRow] })
+                body: JSON.stringify({ values: rowsToSave })
             });
         }
 
@@ -932,7 +1040,7 @@ async function saveAddData() {
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert(editingSheetRow ? "Cập nhật dữ liệu thành công!" : "Thêm dữ liệu thành công!");
+        alert(editingSheetRow ? "Cập nhật dữ liệu thành công!" : `Đã lưu thành công ${rowsToSave.length} dòng!`);
         closeAddModal();
         await fetchData();
     } catch (err) {

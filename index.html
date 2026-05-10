@@ -223,13 +223,34 @@
                     </div>
                 </div>
             </div>
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
+        </div>
+
+        <div id="pendingRowsContainer" style="margin-top: 20px; display: none;">
+            <h3
+                style="font-size: 0.85rem; font-weight: 700; color: #1e293b; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                Danh Sách Tạm Chờ (<span id="pendingCount">0</span> dòng)
+                <button onclick="clearPendingData()"
+                    style="color: #ef4444; background: none; border: none; font-size: 0.75rem; cursor: pointer; text-decoration: underline;">Xóa
+                    hết</button>
+            </h3>
+            <div id="pendingRowsList"
+                style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 5px; font-size: 0.75rem;">
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; gap: 10px;">
+            <button onclick="addCurrentToPending()" id="addMoreBtn"
+                style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--primary); background: #f0fdf4; color: var(--primary); cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                + Thêm & Tiếp Tục
+            </button>
+            <div style="display: flex; gap: 10px;">
                 <button onclick="closeAddModal()"
                     style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
-                <button onclick="saveAddData()"
+                <button id="mainSaveBtn" onclick="saveAddData()"
                     style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
             </div>
         </div>
+    </div>
     </div>
 
     <div id="addModalAFL"
