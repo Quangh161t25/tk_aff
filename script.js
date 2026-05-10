@@ -846,14 +846,14 @@ async function openAddModal(editData = null) {
             }
 
             selectTk.value = editData[2] || '';
-            document.getElementById('addClick').value = editData[3] || '';
-            document.getElementById('addDonHang').value = editData[4] || '';
-            document.getElementById('addHoaHong').value = editData[5] || '';
-            document.getElementById('addHhVideo').value = editData[6] || '';
-            document.getElementById('addHhLive').value = editData[7] || '';
-            document.getElementById('addHhMxh').value = editData[8] || '';
-            document.getElementById('addLuotBan').value = editData[9] || '';
-            document.getElementById('addGmv').value = editData[10] || '';
+            document.getElementById('addClick').value = (Number(editData[3]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addDonHang').value = (Number(editData[4]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addHoaHong').value = (Number(editData[5]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addHhVideo').value = (Number(editData[6]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addHhLive').value = (Number(editData[7]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addHhMxh').value = (Number(editData[8]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addLuotBan').value = (Number(editData[9]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            document.getElementById('addGmv').value = (Number(editData[10]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
         } else {
             title.innerText = 'Thêm Mới Dữ Liệu DATA';
             saveBtn.innerText = 'Lưu';
@@ -886,15 +886,14 @@ function addCurrentToPending() {
     }
 
     const ngay = document.getElementById('addNgay').value;
-    const tk = document.getElementById('addTk').value.trim();
-    const click = document.getElementById('addClick').value || 0;
-    const donHang = document.getElementById('addDonHang').value || 0;
-    const luotBan = document.getElementById('addLuotBan').value || 0;
-    const hoaHong = document.getElementById('addHoaHong').value || 0;
-    const hhVideo = document.getElementById('addHhVideo').value || 0;
-    const hhLive = document.getElementById('addHhLive').value || 0;
-    const hhMxh = document.getElementById('addHhMxh').value || 0;
-    const gmv = document.getElementById('addGmv').value || 0;
+    const click = cleanNumber(document.getElementById('addClick').value);
+    const donHang = cleanNumber(document.getElementById('addDonHang').value);
+    const luotBan = cleanNumber(document.getElementById('addLuotBan').value);
+    const hoaHong = cleanNumber(document.getElementById('addHoaHong').value);
+    const hhVideo = cleanNumber(document.getElementById('addHhVideo').value);
+    const hhLive = cleanNumber(document.getElementById('addHhLive').value);
+    const hhMxh = cleanNumber(document.getElementById('addHhMxh').value);
+    const gmv = cleanNumber(document.getElementById('addGmv').value);
 
     if (!ngay || !tk) {
         alert("Vui lòng nhập Ngày và TK.");
@@ -929,11 +928,23 @@ function addCurrentToPending() {
     document.getElementById('addGmv').value = '';
 }
 
+function formatInput(el) {
+    let val = el.value.replace(/[^0-9]/g, '');
+    if (val === '') { el.value = ''; return; }
+    el.value = Number(val).toLocaleString('vi-VN').replace(/,/g, '.');
+}
+
+function cleanNumber(val) {
+    if (!val) return 0;
+    return Number(String(val).replace(/\./g, '')) || 0;
+}
+
 function calculateTotalHoaHong() {
-    const v = Number(document.getElementById('addHhVideo').value) || 0;
-    const l = Number(document.getElementById('addHhLive').value) || 0;
-    const m = Number(document.getElementById('addHhMxh').value) || 0;
-    document.getElementById('addHoaHong').value = v + l + m;
+    const v = cleanNumber(document.getElementById('addHhVideo').value);
+    const l = cleanNumber(document.getElementById('addHhLive').value);
+    const m = cleanNumber(document.getElementById('addHhMxh').value);
+    const total = v + l + m;
+    document.getElementById('addHoaHong').value = total.toLocaleString('vi-VN').replace(/,/g, '.');
 }
 
 function updatePendingUI() {
@@ -1003,14 +1014,14 @@ async function saveAddData() {
         // Lưu duy nhất dòng đang có trên form
         const ngay = document.getElementById('addNgay').value;
         const tk = document.getElementById('addTk').value.trim();
-        const click = document.getElementById('addClick').value || 0;
-        const donHang = document.getElementById('addDonHang').value || 0;
-        const luotBan = document.getElementById('addLuotBan').value || 0;
-        const hoaHong = document.getElementById('addHoaHong').value || 0;
-        const hhVideo = document.getElementById('addHhVideo').value || 0;
-        const hhLive = document.getElementById('addHhLive').value || 0;
-        const hhMxh = document.getElementById('addHhMxh').value || 0;
-        const gmv = document.getElementById('addGmv').value || 0;
+        const click = cleanNumber(document.getElementById('addClick').value);
+        const donHang = cleanNumber(document.getElementById('addDonHang').value);
+        const luotBan = cleanNumber(document.getElementById('addLuotBan').value);
+        const hoaHong = cleanNumber(document.getElementById('addHoaHong').value);
+        const hhVideo = cleanNumber(document.getElementById('addHhVideo').value);
+        const hhLive = cleanNumber(document.getElementById('addHhLive').value);
+        const hhMxh = cleanNumber(document.getElementById('addHhMxh').value);
+        const gmv = cleanNumber(document.getElementById('addGmv').value);
 
         if (!ngay || !tk) {
             alert("Vui lòng nhập Ngày và TK.");

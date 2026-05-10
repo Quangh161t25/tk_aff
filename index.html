@@ -169,10 +169,12 @@
     </div>
 
     <div id="addModal"
-        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        style="display: none; position: fixed; inset: 0; background: #fff; z-index: 1000; align-items: stretch; justify-content: stretch;">
         <div
-            style="background: white; padding: 25px; border-radius: 12px; width: 400px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
-            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới Dữ Liệu DATA</h2>
+            style="background: white; padding: 25px; width: 100%; height: 100%; display: flex; flex-direction: column; overflow-y: auto;">
+            <h2
+                style="margin-bottom: 25px; color: var(--primary); font-size: 1.5rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px;">
+                Thêm Mới Dữ Liệu DATA</h2>
             <div style="display: flex; flex-direction: column; gap: 15px;">
                 <div>
                     <label
@@ -192,19 +194,22 @@
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Click</label>
-                        <input type="number" id="addClick" class="search-input" style="width: 100%;" placeholder="0">
+                        <input type="text" id="addClick" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this)">
                     </div>
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Đơn
                             Hàng</label>
-                        <input type="number" id="addDonHang" class="search-input" style="width: 100%;" placeholder="0">
+                        <input type="text" id="addDonHang" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this)">
                     </div>
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Lượt
                             Bán</label>
-                        <input type="number" id="addLuotBan" class="search-input" style="width: 100%;" placeholder="0">
+                        <input type="text" id="addLuotBan" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this)">
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
@@ -212,13 +217,15 @@
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Hoa
                             Hồng Tổng</label>
-                        <input type="number" id="addHoaHong" class="search-input"
-                            style="width: 100%; background: #f1f5f9;" placeholder="0" readonly>
+                        <input type="text" id="addHoaHong" class="search-input"
+                            style="width: 100%; background: #f1f5f9; font-weight: 700; color: var(--primary);"
+                            placeholder="0" readonly>
                     </div>
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">GMV</label>
-                        <input type="number" id="addGmv" class="search-input" style="width: 100%;" placeholder="0">
+                        <input type="text" id="addGmv" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this)">
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px;">
@@ -226,22 +233,22 @@
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">HH
                             Video</label>
-                        <input type="number" id="addHhVideo" class="search-input" style="width: 100%;" placeholder="0"
-                            oninput="calculateTotalHoaHong()">
+                        <input type="text" id="addHhVideo" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this); calculateTotalHoaHong()">
                     </div>
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">HH
                             Live</label>
-                        <input type="number" id="addHhLive" class="search-input" style="width: 100%;" placeholder="0"
-                            oninput="calculateTotalHoaHong()">
+                        <input type="text" id="addHhLive" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this); calculateTotalHoaHong()">
                     </div>
                     <div style="flex: 1;">
                         <label
                             style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">HH
                             MXH</label>
-                        <input type="number" id="addHhMxh" class="search-input" style="width: 100%;" placeholder="0"
-                            oninput="calculateTotalHoaHong()">
+                        <input type="text" id="addHhMxh" class="search-input" style="width: 100%;" placeholder="0"
+                            oninput="formatInput(this); calculateTotalHoaHong()">
                     </div>
                 </div>
             </div>
