@@ -52,15 +52,15 @@ sR2Sh8e3h3Knd6j1tceRIFU=
             imgCol: -1
         },
         'DATA': {
-            range: 'DATA!A2:I',
-            clearRange: 'DATA!A2:I10000',
-            headers: ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'luot_ban', 'gmv', 'nam_thang'],
-            visibleCols: [1, 2, 3, 4, 5, 6, 7],
-            priceCols: [5, 7], // hoa_hong, gmv
+            range: 'DATA!A2:L',
+            clearRange: 'DATA!A2:L10000',
+            headers: ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'],
+            visibleCols: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            priceCols: [5, 6, 7, 8, 10], // hoa_hong, video, live, mxh, gmv
             imgCol: -1
         },
         'DASHBOARD': {
-            range: 'DATA!A2:I'
+            range: 'DATA!A2:L'
         }
     }
 };
@@ -230,7 +230,7 @@ function renderDashboard(dataData) {
         const click = Number(String(row[3] || '').replace(/[^0-9.-]+/g, "")) || 0;
         const donHang = Number(String(row[4] || '').replace(/[^0-9.-]+/g, "")) || 0;
         const hoaHong = Number(String(row[5] || '').replace(/[^0-9.-]+/g, "")) || 0;
-        const gmv = Number(String(row[7] || '').replace(/[^0-9.-]+/g, "")) || 0;
+        const gmv = Number(String(row[10] || '').replace(/[^0-9.-]+/g, "")) || 0;
 
         tClick += click; tDonHang += donHang; tHoaHong += hoaHong; tGmv += gmv;
 
@@ -502,8 +502,8 @@ function renderTable() {
             totals.click += Number(String(row[3] || '').replace(/[^0-9.-]+/g, "")) || 0;
             totals.donHang += Number(String(row[4] || '').replace(/[^0-9.-]+/g, "")) || 0;
             totals.hoaHong += Number(String(row[5] || '').replace(/[^0-9.-]+/g, "")) || 0;
-            totals.luotBan += Number(String(row[6] || '').replace(/[^0-9.-]+/g, "")) || 0;
-            totals.gmv += Number(String(row[7] || '').replace(/[^0-9.-]+/g, "")) || 0;
+            totals.luotBan += Number(String(row[9] || '').replace(/[^0-9.-]+/g, "")) || 0;
+            totals.gmv += Number(String(row[10] || '').replace(/[^0-9.-]+/g, "")) || 0;
         });
         document.getElementById('totalClick').innerText = totals.click.toLocaleString('vi-VN');
         document.getElementById('totalDonHang').innerText = totals.donHang.toLocaleString('vi-VN');
@@ -849,8 +849,11 @@ async function openAddModal(editData = null) {
             document.getElementById('addClick').value = editData[3] || '';
             document.getElementById('addDonHang').value = editData[4] || '';
             document.getElementById('addHoaHong').value = editData[5] || '';
-            document.getElementById('addLuotBan').value = editData[6] || '';
-            document.getElementById('addGmv').value = editData[7] || '';
+            document.getElementById('addHhVideo').value = editData[6] || '';
+            document.getElementById('addHhLive').value = editData[7] || '';
+            document.getElementById('addHhMxh').value = editData[8] || '';
+            document.getElementById('addLuotBan').value = editData[9] || '';
+            document.getElementById('addGmv').value = editData[10] || '';
         } else {
             title.innerText = 'Thêm Mới Dữ Liệu DATA';
             saveBtn.innerText = 'Lưu';
@@ -859,6 +862,9 @@ async function openAddModal(editData = null) {
             document.getElementById('addLuotBan').value = '';
             document.getElementById('addDonHang').value = '';
             document.getElementById('addHoaHong').value = '';
+            document.getElementById('addHhVideo').value = '';
+            document.getElementById('addHhLive').value = '';
+            document.getElementById('addHhMxh').value = '';
             document.getElementById('addGmv').value = '';
         }
     } catch (err) {
@@ -882,9 +888,12 @@ function addCurrentToPending() {
     const ngay = document.getElementById('addNgay').value;
     const tk = document.getElementById('addTk').value.trim();
     const click = document.getElementById('addClick').value || 0;
-    const luotBan = document.getElementById('addLuotBan').value || 0;
     const donHang = document.getElementById('addDonHang').value || 0;
+    const luotBan = document.getElementById('addLuotBan').value || 0;
     const hoaHong = document.getElementById('addHoaHong').value || 0;
+    const hhVideo = document.getElementById('addHhVideo').value || 0;
+    const hhLive = document.getElementById('addHhLive').value || 0;
+    const hhMxh = document.getElementById('addHhMxh').value || 0;
     const gmv = document.getElementById('addGmv').value || 0;
 
     if (!ngay || !tk) {
@@ -898,7 +907,7 @@ function addCurrentToPending() {
 
     // Collect data object
     const entry = {
-        ngay, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang
+        ngay, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang
     };
 
     pendingData.push(entry);
@@ -914,7 +923,17 @@ function addCurrentToPending() {
     document.getElementById('addLuotBan').value = '';
     document.getElementById('addDonHang').value = '';
     document.getElementById('addHoaHong').value = '';
+    document.getElementById('addHhVideo').value = '';
+    document.getElementById('addHhLive').value = '';
+    document.getElementById('addHhMxh').value = '';
     document.getElementById('addGmv').value = '';
+}
+
+function calculateTotalHoaHong() {
+    const v = Number(document.getElementById('addHhVideo').value) || 0;
+    const l = Number(document.getElementById('addHhLive').value) || 0;
+    const m = Number(document.getElementById('addHhMxh').value) || 0;
+    document.getElementById('addHoaHong').value = v + l + m;
 }
 
 function updatePendingUI() {
@@ -971,7 +990,7 @@ async function saveAddData() {
             let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
 
             rowsToSave = pendingData.map(item => {
-                const row = [currentNextId, item.ngayFormat, item.tk, item.click, item.donHang, item.hoaHong, item.luotBan, item.gmv, item.nam_thang];
+                const row = [currentNextId, item.ngayFormat, item.tk, item.click, item.donHang, item.hoaHong, item.hhVideo, item.hhLive, item.hhMxh, item.luotBan, item.gmv, item.nam_thang];
                 currentNextId++;
                 return row;
             });
@@ -985,9 +1004,12 @@ async function saveAddData() {
         const ngay = document.getElementById('addNgay').value;
         const tk = document.getElementById('addTk').value.trim();
         const click = document.getElementById('addClick').value || 0;
-        const luotBan = document.getElementById('addLuotBan').value || 0;
         const donHang = document.getElementById('addDonHang').value || 0;
+        const luotBan = document.getElementById('addLuotBan').value || 0;
         const hoaHong = document.getElementById('addHoaHong').value || 0;
+        const hhVideo = document.getElementById('addHhVideo').value || 0;
+        const hhLive = document.getElementById('addHhLive').value || 0;
+        const hhMxh = document.getElementById('addHhMxh').value || 0;
         const gmv = document.getElementById('addGmv').value || 0;
 
         if (!ngay || !tk) {
@@ -1012,7 +1034,7 @@ async function saveAddData() {
             } catch (e) { nextId = 1; }
         }
 
-        rowsToSave = [[nextId, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang]];
+        rowsToSave = [[nextId, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang]];
     }
 
     document.getElementById('loading').style.display = 'flex';
