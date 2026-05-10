@@ -11,6 +11,32 @@ function toggleSidebar() {
     lucide.createIcons();
 }
 
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check-circle';
+    if (type === 'error') iconName = 'alert-circle';
+
+    toast.innerHTML = `
+        <i data-lucide="${iconName}" style="width: 18px; height: 18px;"></i>
+        <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+    lucide.createIcons({ props: { "stroke-width": 2 }, elements: [toast] });
+
+    // Auto hide after 3 seconds
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 const CONFIG = {
     spreadsheetId: "12FBtF0VyDdMqNxCN6CMrvDdFtxVw4b4e6qIUs5QQ_ZA",
     serviceAccountEmail: "test-gia-ason@api-test-sheet-161.iam.gserviceaccount.com",
@@ -255,7 +281,7 @@ async function fetchData() {
         }
     } catch (e) {
         console.error("Lỗi khi tải dữ liệu:", e);
-        alert("Không thể tải dữ liệu. Vui lòng kiểm tra lại sheet '" + currentTab + "' có tồn tại không.");
+        showToast("Không thể tải dữ liệu. Vui lòng kiểm tra lại sheet '" + currentTab + "' có tồn tại không.", "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -453,7 +479,7 @@ async function getSheetTitleToIdMap(token) {
 async function deleteDataSheetRow(sheetRow1Based) {
     const rowNum = Number(sheetRow1Based);
     if (!rowNum || rowNum < 2) {
-        alert('Không xác định được dòng cần xóa.');
+        showToast('Không xác định được dòng cần xóa.', 'error');
         return;
     }
     if (!confirm('Xóa dòng này trên Google Sheet? Thao tác không hoàn tác.')) return;
@@ -492,7 +518,7 @@ async function deleteDataSheetRow(sheetRow1Based) {
         filterTable();
     } catch (e) {
         console.error(e);
-        alert('Không xóa được: ' + e.message);
+        showToast('Không xóa được: ' + e.message, 'error');
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -765,7 +791,7 @@ function readExcelRows(file) {
 async function processFiles(files) {
     const excelFiles = files.filter(f => /\.(xlsx|xls|csv)$/i.test(f.name));
     if (!excelFiles.length) {
-        alert("Vui lòng tải lên file Excel hoặc CSV.");
+        showToast("Vui lòng tải lên file Excel hoặc CSV.", "error");
         return;
     }
 
@@ -812,7 +838,7 @@ async function processFiles(files) {
         location.reload();
     } catch (err) {
         console.error(err);
-        alert("Lỗi khi tải dữ liệu: " + err.message);
+        showToast("Lỗi khi tải dữ liệu: " + err.message, "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -862,7 +888,7 @@ async function saveAddDataAFF() {
     const mail = document.getElementById('addAFFMail').value.trim();
 
     if (!id || !ten) {
-        alert("Vui lòng nhập ID và Tên.");
+        showToast("Vui lòng nhập ID và Tên.", "error");
         return;
     }
 
@@ -893,12 +919,12 @@ async function saveAddDataAFF() {
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert(editingSheetRow ? "Cập nhật TK AFF thành công!" : "Thêm TK AFF thành công!");
+        showToast(editingSheetRow ? "Cập nhật TK AFF thành công!" : "Thêm TK AFF thành công!", "success");
         closeAddModalAFF();
         await fetchData();
     } catch (err) {
         console.error(err);
-        alert("Lỗi: " + err.message);
+        showToast("Lỗi: " + err.message, "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -974,7 +1000,7 @@ function closeAddModal() {
 
 function addCurrentToPending() {
     if (editingSheetRow) {
-        alert("Không thể thêm vào danh sách khi đang ở chế độ sửa dòng.");
+        showToast("Không thể thêm vào danh sách khi đang ở chế độ sửa dòng.", "error");
         return;
     }
 
@@ -990,7 +1016,7 @@ function addCurrentToPending() {
     const gmv = cleanNumber(document.getElementById('addGmv').value);
 
     if (!ngay || !tk) {
-        alert("Vui lòng nhập Ngày và TK.");
+        showToast("Vui lòng nhập Ngày và TK.", "error");
         return;
     }
 
@@ -1100,7 +1126,7 @@ async function saveAddData() {
                 return row;
             });
         } catch (e) {
-            alert("Lỗi khi lấy ID: " + e.message);
+            showToast("Lỗi khi lấy ID: " + e.message, "error");
             document.getElementById('loading').style.display = 'none';
             return;
         }
@@ -1118,7 +1144,7 @@ async function saveAddData() {
         const gmv = cleanNumber(document.getElementById('addGmv').value);
 
         if (!ngay || !tk) {
-            alert("Vui lòng nhập Ngày và TK.");
+            showToast("Vui lòng nhập Ngày và TK.", "error");
             return;
         }
 
@@ -1167,12 +1193,12 @@ async function saveAddData() {
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert(editingSheetRow ? "Cập nhật dữ liệu thành công!" : `Đã lưu thành công ${rowsToSave.length} dòng!`);
+        showToast(editingSheetRow ? "Cập nhật dữ liệu thành công!" : `Đã lưu thành công ${rowsToSave.length} dòng!`, "success");
         closeAddModal();
         await fetchData();
     } catch (err) {
         console.error(err);
-        alert("Lỗi: " + err.message);
+        showToast("Lỗi: " + err.message, "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -1234,7 +1260,7 @@ async function saveAddDataPay() {
     const soTien = cleanNumber(document.getElementById('paySoTien').value);
 
     if (!ngay || !tk) {
-        alert("Vui lòng nhập Ngày và TK.");
+        showToast("Vui lòng nhập Ngày và TK.", "error");
         return;
     }
 
@@ -1278,11 +1304,11 @@ async function saveAddDataPay() {
 
         if (!res.ok) throw new Error("Lỗi cập nhật API");
 
-        alert("Thành công!");
+        showToast("Thành công!", "success");
         closeAddModalPay();
         await fetchData();
     } catch (err) {
-        alert("Lỗi: " + err.message);
+        showToast("Lỗi: " + err.message, "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
