@@ -73,6 +73,7 @@ const JOY_VALID_TABS = ['TK_AFL', 'DATA', 'DASHBOARD'];
 
 let currentTab = 'TK_AFL', allData = [], accessToken = null, tokenExpiry = 0;
 let currentPage = 1, rowsPerPage = 100, filteredData = [];
+let editingSheetRow = null;
 /** Map tên tab (tên sheet) → sheetId Google, cache nhẹ cho batchUpdate */
 let sheetTitleToIdCache = null;
 
@@ -545,8 +546,20 @@ function renderTable() {
         const sr = getDataSheetRow(row);
         let extraCols = `<td><button type="button" class="btn-delete" onclick="deleteDataSheetRow(${sr})">Xóa</button></td>`;
 
-        return `<tr>${cells}${extraCols}</tr>`;
+        return `<tr style="cursor: pointer;" title="Nhấp đúp để sửa" ondblclick='handleEditRow(${sr})'>${cells}${extraCols}</tr>`;
     }).join('');
+}
+
+function handleEditRow(sheetRow) {
+    const rowData = allData.find(r => r._sheetRow === sheetRow);
+    if (!rowData) return;
+
+    editingSheetRow = sheetRow;
+    if (currentTab === 'DATA') {
+        openAddModal(rowData);
+    } else {
+        openAddModalAFL(rowData);
+    }
 
     renderPagination();
 }
@@ -716,6 +729,7 @@ async function processFiles(files) {
 
 
 function openCorrectAddModal() {
+    editingSheetRow = null;
     if (currentTab === 'DATA') {
         openAddModal();
     } else {
@@ -723,15 +737,29 @@ function openCorrectAddModal() {
     }
 }
 
-function openAddModalAFL() {
+function openAddModalAFL(editData = null) {
     document.getElementById('addModalAFL').style.display = 'flex';
-    document.getElementById('addAflId').value = '';
-    document.getElementById('addAflTen').value = '';
-    document.getElementById('addAflMail').value = '';
+    const title = document.querySelector('#addModalAFL h2');
+    const saveBtn = document.querySelector('#addModalAFL button[onclick="saveAddDataAFL()"]');
+
+    if (editData) {
+        title.innerText = 'Sửa TK AFL';
+        saveBtn.innerText = 'Cập Nhật';
+        document.getElementById('addAflId').value = editData[0] || '';
+        document.getElementById('addAflTen').value = editData[1] || '';
+        document.getElementById('addAflMail').value = editData[2] || '';
+    } else {
+        title.innerText = 'Thêm Mới TK AFL';
+        saveBtn.innerText = 'Lưu';
+        document.getElementById('addAflId').value = '';
+        document.getElementById('addAflTen').value = '';
+        document.getElementById('addAflMail').value = '';
+    }
 }
 
 function closeAddModalAFL() {
     document.getElementById('addModalAFL').style.display = 'none';
+    editingSheetRow = null;
 }
 
 async function saveAddDataAFL() {
@@ -745,46 +773,50 @@ async function saveAddDataAFL() {
     }
 
     document.getElementById('loading').style.display = 'flex';
-    document.querySelector('#loading p').innerText = `Đang thêm TK AFL...`;
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật TK AFL...` : `Đang thêm TK AFL...`;
     try {
         const token = await getAccessToken();
-
         const newRow = [id, ten, mail];
 
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFL!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: [newRow] })
-        });
+        let res;
+        if (editingSheetRow) {
+            const range = `TK_AFL!A${editingSheetRow}:C${editingSheetRow}`;
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        } else {
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFL!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        }
 
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert("Thêm TK AFL thành công!");
+        alert(editingSheetRow ? "Cập nhật TK AFL thành công!" : "Thêm TK AFL thành công!");
         closeAddModalAFL();
         await fetchData();
     } catch (err) {
         console.error(err);
-        alert("Lỗi khi thêm TK AFL: " + err.message);
+        alert("Lỗi: " + err.message);
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
 }
 
-async function openAddModal() {
+async function openAddModal(editData = null) {
     document.getElementById('addModal').style.display = 'flex';
-    document.getElementById('addNgay').value = new Date().toISOString().split('T')[0];
+    const title = document.querySelector('#addModal h2');
+    const saveBtn = document.querySelector('#addModal button[onclick="saveAddData()"]');
 
     const selectTk = document.getElementById('addTk');
     selectTk.innerHTML = '<option value="">-- Đang tải TK... --</option>';
-
-    document.getElementById('addClick').value = '';
-    document.getElementById('addLuotBan').value = '';
-    document.getElementById('addDonHang').value = '';
-    document.getElementById('addHoaHong').value = '';
-    document.getElementById('addGmv').value = '';
 
     try {
         const token = await getAccessToken();
@@ -795,8 +827,39 @@ async function openAddModal() {
             const ten = String(r[1] || '').trim();
             if (!id) return '';
             return `<option value="${id}">${id} - ${ten}</option>`;
-        }).join('');
+        }).filter(Boolean).join('');
         selectTk.innerHTML = `<option value="">-- Chọn TK --</option>` + opts;
+
+        if (editData) {
+            title.innerText = 'Sửa Dữ Liệu DATA';
+            saveBtn.innerText = 'Cập Nhật';
+
+            // Format date for input: DD/MM/YYYY -> YYYY-MM-DD
+            if (editData[1]) {
+                const parts = editData[1].split('/');
+                if (parts.length === 3) {
+                    document.getElementById('addNgay').value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                } else {
+                    document.getElementById('addNgay').value = editData[1];
+                }
+            }
+
+            selectTk.value = editData[2] || '';
+            document.getElementById('addClick').value = editData[3] || '';
+            document.getElementById('addDonHang').value = editData[4] || '';
+            document.getElementById('addHoaHong').value = editData[5] || '';
+            document.getElementById('addLuotBan').value = editData[6] || '';
+            document.getElementById('addGmv').value = editData[7] || '';
+        } else {
+            title.innerText = 'Thêm Mới Dữ Liệu DATA';
+            saveBtn.innerText = 'Lưu';
+            document.getElementById('addNgay').value = new Date().toISOString().split('T')[0];
+            document.getElementById('addClick').value = '';
+            document.getElementById('addLuotBan').value = '';
+            document.getElementById('addDonHang').value = '';
+            document.getElementById('addHoaHong').value = '';
+            document.getElementById('addGmv').value = '';
+        }
     } catch (err) {
         console.error(err);
         selectTk.innerHTML = '<option value="">Lỗi tải dữ liệu TK</option>';
@@ -805,6 +868,7 @@ async function openAddModal() {
 
 function closeAddModal() {
     document.getElementById('addModal').style.display = 'none';
+    editingSheetRow = null;
 }
 
 async function saveAddData() {
@@ -826,38 +890,54 @@ async function saveAddData() {
     const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
     document.getElementById('loading').style.display = 'flex';
-    document.querySelector('#loading p').innerText = `Đang thêm dữ liệu...`;
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật dữ liệu...` : `Đang thêm dữ liệu...`;
     try {
         const token = await getAccessToken();
+        let nextId;
 
-        const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        const idData = await idRes.json();
-        const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
-        const nextId = ids.length ? Math.max(...ids) + 1 : 1;
+        if (editingSheetRow) {
+            const rowData = allData.find(r => r._sheetRow === editingSheetRow);
+            nextId = rowData[0]; // Keep existing ID
+        } else {
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const idData = await idRes.json();
+            const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
+            nextId = ids.length ? Math.max(...ids) + 1 : 1;
+        }
 
         const newRow = [
             nextId, ngayFormat, tk, click, donHang, hoaHong, luotBan, gmv, nam_thang
         ];
 
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ values: [newRow] })
-        });
+        let res;
+        if (editingSheetRow) {
+            const range = `DATA!A${editingSheetRow}:I${editingSheetRow}`;
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        } else {
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ values: [newRow] })
+            });
+        }
 
         if (!res.ok) {
             const err = await res.json();
             throw new Error(err.error?.message || "Lỗi cập nhật API");
         }
 
-        alert("Thêm dữ liệu thành công!");
+        alert(editingSheetRow ? "Cập nhật dữ liệu thành công!" : "Thêm dữ liệu thành công!");
         closeAddModal();
         await fetchData();
     } catch (err) {
         console.error(err);
-        alert("Lỗi khi thêm dữ liệu: " + err.message);
+        alert("Lỗi: " + err.message);
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
