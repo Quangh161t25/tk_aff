@@ -78,10 +78,10 @@ sR2Sh8e3h3Knd6j1tceRIFU=
             imgCol: -1
         },
         'DATA': {
-            range: 'DATA!A2:L',
-            clearRange: 'DATA!A2:L10000',
-            headers: ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'],
-            visibleCols: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            range: 'DATA!A2:N',
+            clearRange: 'DATA!A2:N10000',
+            headers: ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang', 'ghi_chu_viec', 'ghi_chu_tiet'],
+            visibleCols: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
             priceCols: [5, 6, 7, 8, 10], // hoa_hong, video, live, mxh, gmv
             imgCol: -1
         },
@@ -109,6 +109,7 @@ let currentTab = 'DASHBOARD', allData = [], accessToken = null, tokenExpiry = 0;
 let currentPage = 1, rowsPerPage = 100, filteredData = [];
 let editingSheetRow = null;
 let pendingData = [];
+let pendingPayData = [];
 /** Map tên tab (tên sheet) → sheetId Google, cache nhẹ cho batchUpdate */
 let sheetTitleToIdCache = null;
 
@@ -353,20 +354,8 @@ function renderDashboard(dataData, payData = []) {
     });
 
     const allTks = Object.keys(tkMap).sort((a, b) => tkMap[b].hoaHong - tkMap[a].hoaHong);
-    const top10Keys = allTks.slice(0, 10);
-    const namesMap = window._AFFNamesMap || {};
-
-    const tkLabels = top10Keys.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
-    const tkHoaHongValues = top10Keys.map(k => tkMap[k].hoaHong);
-
-    // Add 'Others' if there are more than 10 accounts
-    if (allTks.length > 10) {
-        const othersHoaHong = allTks.slice(10).reduce((sum, k) => sum + tkMap[k].hoaHong, 0);
-        if (othersHoaHong > 0) {
-            tkLabels.push('Khác');
-            tkHoaHongValues.push(othersHoaHong);
-        }
-    }
+    const tkLabels = allTks.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
+    const tkHoaHongValues = allTks.map(k => tkMap[k].hoaHong);
 
     if (dTkPieChart) dTkPieChart.destroy();
     const ctxPie = document.getElementById('tkPieChart').getContext('2d');
@@ -408,7 +397,8 @@ function renderDashboard(dataData, payData = []) {
         }
     });
 
-    const tkBarKeys = Object.keys(tkMap).sort((a, b) => tkMap[b].click - tkMap[a].click).slice(0, 15);
+    const namesMap = window._AFFNamesMap || {};
+    const tkBarKeys = Object.keys(tkMap).sort((a, b) => tkMap[b].click - tkMap[a].click);
     const tkBarLabels = tkBarKeys.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
     const tkClickValues = tkBarKeys.map(k => tkMap[k].click);
     const tkDonHangValues = tkBarKeys.map(k => tkMap[k].donHang);
@@ -1252,62 +1242,160 @@ async function openAddModalPay(editData = null) {
 function closeAddModalPay() {
     document.getElementById('addModalPay').style.display = 'none';
     editingSheetRow = null;
+    clearPendingPayData();
 }
 
-async function saveAddDataPay() {
+function addCurrentPayToPending() {
+    if (editingSheetRow) {
+        showToast("Không thể thêm vào danh sách khi đang ở chế độ sửa dòng.", "error");
+        return;
+    }
+
     const ngay = document.getElementById('payNgay').value;
     const tk = document.getElementById('payTk').value.trim();
     const soTien = cleanNumber(document.getElementById('paySoTien').value);
 
-    if (!ngay || !tk) {
-        showToast("Vui lòng nhập Ngày và TK.", "error");
+    if (!ngay || !tk || !soTien) {
+        showToast("Vui lòng nhập Ngày, TK và Số Tiền.", "error");
         return;
     }
 
     const d = new Date(ngay);
     const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
-    document.getElementById('loading').style.display = 'flex';
-    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật...` : `Đang lưu...`;
+    const entry = { ngay, ngayFormat, tk, soTien };
+    pendingPayData.push(entry);
+    updatePendingPayUI();
 
-    try {
-        const token = await getAccessToken();
+    // Tăng ngày lên 1 cho tiện
+    const nextDate = new Date(ngay);
+    nextDate.setDate(nextDate.getDate() + 1);
+    document.getElementById('payNgay').value = nextDate.toISOString().split('T')[0];
+
+    // Reset fields
+    document.getElementById('paySoTien').value = '';
+}
+
+function updatePendingPayUI() {
+    const container = document.getElementById('pendingPayRowsContainer');
+    const list = document.getElementById('pendingPayRowsList');
+    const count = document.getElementById('pendingPayCount');
+    const paySaveBtn = document.getElementById('paySaveBtn');
+
+    if (pendingPayData.length > 0) {
+        container.style.display = 'block';
+        count.innerText = pendingPayData.length;
+        paySaveBtn.innerText = `Lưu (${pendingPayData.length} dòng)`;
+
+        list.innerHTML = pendingPayData.map((item, idx) => `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 6px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; margin-bottom:2px; border-radius:4px;">
+                <span><b>${item.ngayFormat}</b> - ${item.tk} (${item.soTien.toLocaleString('vi-VN')}đ)</span>
+                <button onclick="removePendingPayRow(${idx})" style="color:#ef4444; border:none; background:none; cursor:pointer; font-weight:700;">×</button>
+            </div>
+        `).join('');
+    } else {
+        container.style.display = 'none';
+        count.innerText = '0';
+        paySaveBtn.innerText = 'Lưu';
+        list.innerHTML = '';
+    }
+}
+
+function removePendingPayRow(index) {
+    pendingPayData.splice(index, 1);
+    updatePendingPayUI();
+}
+
+function clearPendingPayData() {
+    pendingPayData = [];
+    updatePendingPayUI();
+}
+
+async function saveAddDataPay() {
+    const token = await getAccessToken();
+    let rowsToSave = [];
+
+    if (pendingPayData.length > 0 && !editingSheetRow) {
+        if (!confirm(`Lưu tất cả ${pendingPayData.length} dòng dữ liệu PAY đã nhập?`)) return;
+
+        document.getElementById('loading').style.display = 'flex';
+        document.querySelector('#loading p').innerText = `Đang lấy ID và chuẩn bị dữ liệu...`;
+
+        try {
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+            const idData = await idRes.json();
+            const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
+            let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
+
+            rowsToSave = pendingPayData.map(item => {
+                const row = [currentNextId, item.ngayFormat, item.tk, item.soTien];
+                currentNextId++;
+                return row;
+            });
+        } catch (e) {
+            showToast("Lỗi khi lấy ID: " + e.message, "error");
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+    } else {
+        const ngay = document.getElementById('payNgay').value;
+        const tk = document.getElementById('payTk').value.trim();
+        const soTien = cleanNumber(document.getElementById('paySoTien').value);
+
+        if (!ngay || !tk) {
+            showToast("Vui lòng nhập Ngày và TK.", "error");
+            return;
+        }
+
+        const d = new Date(ngay);
+        const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
         let nextId;
-
         if (editingSheetRow) {
             const rowData = allData.find(r => r._sheetRow === editingSheetRow);
             nextId = rowData[0];
         } else {
-            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
-            const idData = await idRes.json();
-            const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
-            nextId = ids.length ? Math.max(...ids) + 1 : 1;
+            try {
+                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+                const idData = await idRes.json();
+                const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
+                nextId = ids.length ? Math.max(...ids) + 1 : 1;
+            } catch (e) { nextId = 1; }
         }
 
-        const newRow = [nextId, ngayFormat, tk, soTien];
+        rowsToSave = [[nextId, ngayFormat, tk, soTien]];
+    }
 
+    document.getElementById('loading').style.display = 'flex';
+    document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật...` : `Đang lưu ${rowsToSave.length} dòng...`;
+
+    try {
         let res;
         if (editingSheetRow) {
             const range = `PAY!A${editingSheetRow}:D${editingSheetRow}`;
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: [newRow] })
+                body: JSON.stringify({ values: rowsToSave })
             });
         } else {
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ values: [newRow] })
+                body: JSON.stringify({ values: rowsToSave })
             });
         }
 
-        if (!res.ok) throw new Error("Lỗi cập nhật API");
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error?.message || "Lỗi cập nhật API");
+        }
 
-        showToast("Thành công!", "success");
+        showToast(editingSheetRow ? "Cập nhật thành công!" : `Đã lưu thành công ${rowsToSave.length} dòng!`, "success");
         closeAddModalPay();
         await fetchData();
     } catch (err) {
+        console.error(err);
         showToast("Lỗi: " + err.message, "error");
     } finally {
         document.getElementById('loading').style.display = 'none';
