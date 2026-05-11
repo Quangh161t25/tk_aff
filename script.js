@@ -353,6 +353,7 @@ function renderDashboard(dataData, payData = []) {
         options: { responsive: true, maintainAspectRatio: false }
     });
 
+    const namesMap = window._AFFNamesMap || {};
     const allTks = Object.keys(tkMap).sort((a, b) => tkMap[b].hoaHong - tkMap[a].hoaHong);
     const tkLabels = allTks.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
     const tkHoaHongValues = allTks.map(k => tkMap[k].hoaHong);
@@ -397,7 +398,6 @@ function renderDashboard(dataData, payData = []) {
         }
     });
 
-    const namesMap = window._AFFNamesMap || {};
     const tkBarKeys = Object.keys(tkMap).sort((a, b) => tkMap[b].click - tkMap[a].click);
     const tkBarLabels = tkBarKeys.map(k => namesMap[k] ? `${k} - ${namesMap[k]}` : k);
     const tkClickValues = tkBarKeys.map(k => tkMap[k].click);
