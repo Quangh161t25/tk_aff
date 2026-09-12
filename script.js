@@ -112,6 +112,63 @@ let pendingData = [];
 let pendingPayData = [];
 /** Map tên tab (tên sheet) → sheetId Google, cache nhẹ cho batchUpdate */
 let sheetTitleToIdCache = null;
+let sheetTitlesCache = null;
+
+function formatSheetRange(sheetTitle, cellRange) {
+    const cleanTitle = String(sheetTitle).replace(/'/g, "''");
+    return `'${cleanTitle}'!${cellRange}`;
+}
+
+async function getSheetTitles(token) {
+    if (sheetTitlesCache && sheetTitlesCache.length > 0) return sheetTitlesCache;
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}?fields=sheets(properties(sheetId,title))`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Không đọc được danh sách sheet');
+    const data = await res.json();
+    sheetTitlesCache = (data.sheets || []).map(s => s.properties.title);
+    const map = {};
+    for (const s of data.sheets || []) {
+        map[s.properties.title] = s.properties.sheetId;
+    }
+    sheetTitleToIdCache = map;
+    return sheetTitlesCache;
+}
+
+async function getActualSheetTitle(tabKey, token) {
+    try {
+        const titles = await getSheetTitles(token);
+        if (tabKey === 'TK_AFF') {
+            if (titles.includes('TK_AFF')) return 'TK_AFF';
+            if (titles.includes('Tài Khoản')) return 'Tài Khoản';
+            if (titles.includes('Tài khoản')) return 'Tài khoản';
+            if (titles.includes('Tai Khoan')) return 'Tai Khoan';
+            if (titles.includes('TK AFF')) return 'TK AFF';
+            const found = titles.find(t => {
+                const lower = t.toLowerCase();
+                return lower.includes('tài khoản') || lower.includes('tai khoan') || lower.includes('tk_aff') || lower.includes('tk aff') || lower === 'tk';
+            });
+            if (found) return found;
+            return titles[1] || 'TK_AFF';
+        }
+        if (tabKey === 'DATA') {
+            if (titles.includes('DATA')) return 'DATA';
+            const found = titles.find(t => t.toLowerCase() === 'data' || t.toLowerCase().includes('data'));
+            if (found) return found;
+            return 'DATA';
+        }
+        if (tabKey === 'PAY') {
+            if (titles.includes('PAY')) return 'PAY';
+            const found = titles.find(t => t.toLowerCase() === 'pay' || t.toLowerCase().includes('pay'));
+            if (found) return found;
+            return 'PAY';
+        }
+        return tabKey;
+    } catch (e) {
+        console.warn('Lỗi getActualSheetTitle:', e);
+        return tabKey;
+    }
+}
 
 async function getAccessToken() {
     if (accessToken && Date.now() < tokenExpiry - 300000) return accessToken;
@@ -220,11 +277,13 @@ async function fetchData() {
     document.querySelector('#loading p').innerText = `Đang tải dữ liệu ${currentTab}...`;
     try {
         const token = await getAccessToken();
+        const actualSheetTitle = await getActualSheetTitle(currentTab, token);
         const tabConfig = CONFIG.tabs[currentTab];
 
         if (currentTab === 'TK_AFF') {
-            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF
-            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A1:ZZ`, {
+            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF / Tài Khoản
+            const range = formatSheetRange(actualSheetTitle, 'A1:ZZ');
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
@@ -263,14 +322,19 @@ async function fetchData() {
             }
         } else {
             // Fetch main data
-            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${tabConfig.range}`, { headers: { Authorization: `Bearer ${token}` } });
+            const range = formatSheetRange(actualSheetTitle, currentTab === 'DATA' ? 'A2:N' : currentTab === 'PAY' ? 'A2:D' : 'A2:L');
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             const data = await res.json();
 
             // Fetch account names for mapping if in DATA, DASHBOARD or PAY
             let AFFNamesMap = {};
             if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
                 try {
-                    const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
+                    const affSheetName = await getActualSheetTitle('TK_AFF', token);
+                    const affRange = formatSheetRange(affSheetName, 'A2:B');
+                    const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(affRange)}`, { headers: { Authorization: `Bearer ${token}` } });
                     const AFFData = await AFFRes.json();
                     (AFFData.values || []).forEach(r => {
                         if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
@@ -288,7 +352,9 @@ async function fetchData() {
 
         if (currentTab === 'DASHBOARD') {
             try {
-                const payRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:D`, { headers: { Authorization: `Bearer ${token}` } });
+                const paySheetName = await getActualSheetTitle('PAY', token);
+                const payRange = formatSheetRange(paySheetName, 'A2:D');
+                const payRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(payRange)}`, { headers: { Authorization: `Bearer ${token}` } });
                 const payData = await payRes.json();
                 window._allPayData = (payData.values || []).map((row, i) => {
                     const arr = Array.isArray(row) ? row.slice() : [];
@@ -545,9 +611,10 @@ async function deleteDataSheetRow(sheetRow1Based) {
     document.querySelector('#loading p').innerText = 'Đang xóa dòng...';
     try {
         const token = await getAccessToken();
+        const actualSheetTitle = await getActualSheetTitle(currentTab, token);
         const map = await getSheetTitleToIdMap(token);
-        const sheetId = map[currentTab];
-        if (sheetId === undefined) throw new Error('Không tìm thấy sheet: ' + currentTab);
+        const sheetId = map[actualSheetTitle] ?? map[currentTab];
+        if (sheetId === undefined) throw new Error('Không tìm thấy sheet: ' + actualSheetTitle);
 
         const startIndex = rowNum - 1;
         const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}:batchUpdate`, {
@@ -571,6 +638,7 @@ async function deleteDataSheetRow(sheetRow1Based) {
             throw new Error(err.error?.message || 'batchUpdate thất bại');
         }
         sheetTitleToIdCache = null;
+        sheetTitlesCache = null;
         await fetchData();
         filterTable();
     } catch (e) {
@@ -948,13 +1016,15 @@ async function processFiles(files) {
         }
 
         const token = await getAccessToken();
-        const tabConfig = CONFIG.tabs[currentTab];
-        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${tabConfig.clearRange}:clear`, {
+        const actualSheetTitle = await getActualSheetTitle(currentTab, token);
+        const clearRange = formatSheetRange(actualSheetTitle, 'A2:ZZ10000');
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(clearRange)}:clear`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
         });
 
-        const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${currentTab}!A2?valueInputOption=RAW`, {
+        const updateRange = formatSheetRange(actualSheetTitle, 'A2');
+        const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(updateRange)}?valueInputOption=RAW`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({ values: allRowsToUpload })
@@ -965,7 +1035,7 @@ async function processFiles(files) {
             throw new Error(err.error.message || "Lỗi cập nhật API");
         }
 
-        alert(`Đã tải dữ liệu từ ${excelFiles.length} file lên sheet '${currentTab}' thành công!`);
+        alert(`Đã tải dữ liệu từ ${excelFiles.length} file lên sheet '${actualSheetTitle}' thành công!`);
         try { sessionStorage.setItem(JOY_TAB_STORAGE_KEY, currentTab); } catch (_) { }
         location.reload();
     } catch (err) {
@@ -1054,18 +1124,20 @@ async function saveAddDataAFF() {
     document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật TK AFF...` : `Đang thêm TK AFF...`;
     try {
         const token = await getAccessToken();
+        const actualSheetTitle = await getActualSheetTitle('TK_AFF', token);
         const endCol = colIndexToA1(Math.max(0, newRow.length - 1));
 
         let res;
         if (editingSheetRow) {
-            const range = `TK_AFF!A${editingSheetRow}:${endCol}${editingSheetRow}`;
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+            const range = formatSheetRange(actualSheetTitle, `A${editingSheetRow}:${endCol}${editingSheetRow}`);
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: [newRow] })
             });
         } else {
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+            const appendRange = formatSheetRange(actualSheetTitle, 'A2');
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: [newRow] })
@@ -1098,7 +1170,9 @@ async function openAddModal(editData = null) {
 
     try {
         const token = await getAccessToken();
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
+        const affSheetName = await getActualSheetTitle('TK_AFF', token);
+        const affRange = formatSheetRange(affSheetName, 'A2:B');
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(affRange)}`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
         const opts = (data.values || []).map(r => {
             const id = String(r[0] || '').trim();
@@ -1273,7 +1347,9 @@ async function saveAddData() {
 
         try {
             // Lấy ID cuối cùng một lần duy nhất
-            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+            const actualSheetTitle = await getActualSheetTitle('DATA', token);
+            const idRange = formatSheetRange(actualSheetTitle, 'A2:A');
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(idRange)}`, { headers: { Authorization: `Bearer ${token}` } });
             const idData = await idRes.json();
             const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
             let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
@@ -1316,7 +1392,9 @@ async function saveAddData() {
             nextId = rowData[0]; // Giữ ID cũ khi sửa
         } else {
             try {
-                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+                const actualSheetTitle = await getActualSheetTitle('DATA', token);
+                const idRange = formatSheetRange(actualSheetTitle, 'A2:A');
+                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(idRange)}`, { headers: { Authorization: `Bearer ${token}` } });
                 const idData = await idRes.json();
                 const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
                 nextId = ids.length ? Math.max(...ids) + 1 : 1;
@@ -1330,16 +1408,18 @@ async function saveAddData() {
     document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật dữ liệu...` : `Đang lưu ${rowsToSave.length} dòng...`;
 
     try {
+        const actualSheetTitle = await getActualSheetTitle('DATA', token);
         let res;
         if (editingSheetRow) {
-            const range = `DATA!A${editingSheetRow}:L${editingSheetRow}`;
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+            const range = formatSheetRange(actualSheetTitle, `A${editingSheetRow}:L${editingSheetRow}`);
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: rowsToSave })
             });
         } else {
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/DATA!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+            const appendRange = formatSheetRange(actualSheetTitle, 'A2');
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: rowsToSave })
@@ -1369,7 +1449,9 @@ async function openAddModalPay(editData = null) {
 
     try {
         const token = await getAccessToken();
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, {
+        const actualAffTitle = await getActualSheetTitle('TK_AFF', token);
+        const range = formatSheetRange(actualAffTitle, 'A2:B');
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -1481,6 +1563,7 @@ function clearPendingPayData() {
 
 async function saveAddDataPay() {
     const token = await getAccessToken();
+    const actualPayTitle = await getActualSheetTitle('PAY', token);
     let rowsToSave = [];
 
     if (pendingPayData.length > 0 && !editingSheetRow) {
@@ -1490,7 +1573,8 @@ async function saveAddDataPay() {
         document.querySelector('#loading p').innerText = `Đang lấy ID và chuẩn bị dữ liệu...`;
 
         try {
-            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+            const idRange = formatSheetRange(actualPayTitle, 'A2:A');
+            const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(idRange)}`, { headers: { Authorization: `Bearer ${token}` } });
             const idData = await idRes.json();
             const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
             let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
@@ -1524,7 +1608,8 @@ async function saveAddDataPay() {
             nextId = rowData[0];
         } else {
             try {
-                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:A`, { headers: { Authorization: `Bearer ${token}` } });
+                const idRange = formatSheetRange(actualPayTitle, 'A2:A');
+                const idRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(idRange)}`, { headers: { Authorization: `Bearer ${token}` } });
                 const idData = await idRes.json();
                 const ids = (idData.values || []).map(r => Number(r[0])).filter(n => Number.isFinite(n));
                 nextId = ids.length ? Math.max(...ids) + 1 : 1;
@@ -1540,14 +1625,15 @@ async function saveAddDataPay() {
     try {
         let res;
         if (editingSheetRow) {
-            const range = `PAY!A${editingSheetRow}:D${editingSheetRow}`;
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
+            const range = formatSheetRange(actualPayTitle, `A${editingSheetRow}:D${editingSheetRow}`);
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: rowsToSave })
             });
         } else {
-            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/PAY!A2:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+            const appendRange = formatSheetRange(actualPayTitle, 'A2');
+            res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(appendRange)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ values: rowsToSave })
