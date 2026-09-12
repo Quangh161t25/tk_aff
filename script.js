@@ -258,9 +258,7 @@ async function switchTab(tabName) {
         dashboardWrapper.style.display = tabName === 'DASHBOARD' ? 'block' : 'none';
     }
 
-    pageTitle.innerText = tabName === 'TK_AFF' ? 'QUẢN LÝ TK AFF' :
-        tabName === 'DASHBOARD' ? 'DASHBOARD TỔNG QUAN' :
-            tabName === 'PAY' ? 'QUẢN LÝ CHI TRẢ (PAY)' : 'DỮ LIỆU AFF';
+    pageTitle.innerText = tabName;
 
     document.getElementById('searchInput').value = '';
     if (document.getElementById('monthFilter')) document.getElementById('monthFilter').value = '';
