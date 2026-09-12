@@ -249,6 +249,18 @@ async function getActualSheetTitle(tabKey, token) {
             if (found) return found;
             return 'PAY';
         }
+        if (tabKey === 'CAI_DAT' || tabKey === 'SETTINGS') {
+            if (titles.includes('CAI_DAT')) return 'CAI_DAT';
+            if (titles.includes('CAI DAT')) return 'CAI DAT';
+            if (titles.includes('cài đặt cần có')) return 'cài đặt cần có';
+            if (titles.includes('Cài Đặt')) return 'Cài Đặt';
+            const found = titles.find(t => {
+                const lower = t.toLowerCase();
+                return lower.includes('cai_dat') || lower.includes('cài đặt') || lower.includes('cai dat') || lower.includes('setting');
+            });
+            if (found) return found;
+            return 'CAI_DAT';
+        }
         return tabKey;
     } catch (e) {
         console.warn('Lỗi getActualSheetTitle:', e);
@@ -793,22 +805,6 @@ async function deleteDataSheetRow(sheetRow1Based) {
         showToast('Không xóa được: ' + e.message, 'error');
     } finally {
         document.getElementById('loading').style.display = 'none';
-    }
-}
-
-async function init() {
-    lucide.createIcons();
-    initDragAndDrop();
-    if (UP_PARAM) {
-        await fetchData();
-    } else {
-        let saved = '';
-        try { saved = sessionStorage.getItem(JOY_TAB_STORAGE_KEY) || ''; } catch (_) { }
-        if (saved && JOY_VALID_TABS.includes(saved)) {
-            await switchTab(saved);
-        } else {
-            await fetchData();
-        }
     }
 }
 
@@ -2044,7 +2040,164 @@ function resetCurrentTabColumns() {
     showToast(`Đã đặt lại cấu hình cột tab ${tabKey}`, 'info');
 }
 
-function saveAllSettingsFromUI() {
+async function ensureSettingsSheetExists(token) {
+    try {
+        const titles = await getSheetTitles(token);
+        const actualTitle = await getActualSheetTitle('CAI_DAT', token);
+        if (titles.includes(actualTitle)) return actualTitle;
+
+        const addRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}:batchUpdate`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                requests: [{ addSheet: { properties: { title: 'CAI_DAT' } } }]
+            })
+        });
+        if (addRes.ok) {
+            sheetTitlesCache = null;
+            sheetTitleToIdCache = null;
+            return 'CAI_DAT';
+        }
+    } catch (e) {
+        console.warn('Lỗi ensureSettingsSheetExists:', e);
+    }
+    return 'CAI_DAT';
+}
+
+async function loadSettingsFromSheet(token) {
+    try {
+        if (!token) token = await getAccessToken();
+        const sheetTitle = await ensureSettingsSheetExists(token);
+        const range = encodeURIComponent(formatSheetRange(sheetTitle, 'A1:C50'));
+        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.values || data.values.length < 2) return null;
+
+        const parsed = {};
+        for (let i = 1; i < data.values.length; i++) {
+            const row = data.values[i];
+            const k = row[0];
+            const v = row[1];
+            if (!k || v === undefined) continue;
+
+            if (k === 'moduleNames' || k === 'moduleVisibility' || k === 'columns' || k === 'raw_json') {
+                try {
+                    parsed[k] = JSON.parse(v);
+                } catch (_) {
+                    parsed[k] = v;
+                }
+            } else if (k === 'rowsPerPage') {
+                parsed[k] = Number(v) || 100;
+            } else {
+                parsed[k] = v;
+            }
+        }
+
+        if (parsed.raw_json && typeof parsed.raw_json === 'object') {
+            Object.assign(parsed, parsed.raw_json);
+        }
+
+        if (Object.keys(parsed).length > 0) {
+            SYSTEM_SETTINGS = {
+                ...DEFAULT_SETTINGS,
+                ...parsed,
+                moduleNames: { ...DEFAULT_SETTINGS.moduleNames, ...(parsed.moduleNames || {}) },
+                moduleVisibility: { ...DEFAULT_SETTINGS.moduleVisibility, ...(parsed.moduleVisibility || {}) },
+                columns: { ...(parsed.columns || {}) }
+            };
+            try {
+                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(SYSTEM_SETTINGS));
+            } catch (_) {}
+            applySystemSettingsToUI();
+            if (currentTab === 'SETTINGS') {
+                populateSettingsUI();
+            }
+            return SYSTEM_SETTINGS;
+        }
+    } catch (e) {
+        console.warn('Lỗi loadSettingsFromSheet:', e);
+    }
+    return null;
+}
+
+async function saveSettingsToSheet(settings, token) {
+    try {
+        if (!token) token = await getAccessToken();
+        const sheetTitle = await ensureSettingsSheetExists(token);
+
+        const rows = [
+            ['KEY', 'VALUE', 'DESCRIPTION'],
+            ['appTitle', settings.appTitle || 'AFF ĐỨC', 'Tiêu đề hiển thị của ứng dụng'],
+            ['moduleNames', JSON.stringify(settings.moduleNames || {}), 'Tên hiển thị các Module / Tab'],
+            ['moduleVisibility', JSON.stringify(settings.moduleVisibility || {}), 'Ẩn / Hiện các Module'],
+            ['columns', JSON.stringify(settings.columns || {}), 'Cấu hình cột các Tab (thứ tự, tên hiển thị, ẩn hiện)'],
+            ['rowsPerPage', String(settings.rowsPerPage || 100), 'Số dòng phân trang mặc định'],
+            ['defaultSort', settings.defaultSort || 'desc', 'Thứ tự sắp xếp mặc định (desc/asc)'],
+            ['raw_json', JSON.stringify(settings), 'Toàn bộ chuỗi JSON cấu hình backup'],
+            ['updatedAt', new Date().toLocaleString('vi-VN'), 'Thời gian cập nhật gần nhất']
+        ];
+
+        const clearRange = encodeURIComponent(formatSheetRange(sheetTitle, 'A1:Z50'));
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${clearRange}:clear`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const updateRange = encodeURIComponent(formatSheetRange(sheetTitle, 'A1'));
+        const updateRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${updateRange}?valueInputOption=USER_ENTERED`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                range: formatSheetRange(sheetTitle, 'A1'),
+                majorDimension: 'ROWS',
+                values: rows
+            })
+        });
+
+        return updateRes.ok;
+    } catch (e) {
+        console.error('Lỗi saveSettingsToSheet:', e);
+        return false;
+    }
+}
+
+async function reloadSettingsFromSheetUI() {
+    document.getElementById('loading').style.display = 'flex';
+    document.querySelector('#loading p').innerText = 'Đang nạp cấu hình từ Google Sheet CAI_DAT...';
+    try {
+        const token = await getAccessToken();
+        const loaded = await loadSettingsFromSheet(token);
+        if (loaded) {
+            populateSettingsUI();
+            showToast('Đã nạp cài đặt từ Google Sheet CAI_DAT thành công!', 'success');
+        } else {
+            showToast('Không tìm thấy dữ liệu cài đặt trên Google Sheet CAI_DAT.', 'info');
+        }
+    } catch (e) {
+        showToast('Lỗi tải cài đặt: ' + e.message, 'error');
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+async function saveAllSettingsFromUI() {
+    const saveBtn = document.querySelector('.btn-save-settings');
+    const oldBtnContent = saveBtn ? saveBtn.innerHTML : '';
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width: 16px;"></i> Đang lưu...`;
+        lucide.createIcons();
+    }
+
     const appTitle = document.getElementById('set_appTitle')?.value.trim() || 'AFF ĐỨC';
     const moduleNames = { ...SYSTEM_SETTINGS.moduleNames };
     const moduleVisibility = { ...SYSTEM_SETTINGS.moduleVisibility };
@@ -2069,14 +2222,40 @@ function saveAllSettingsFromUI() {
     };
 
     saveSystemSettings(newSettings);
-    showToast('Đã lưu và áp dụng toàn bộ cài đặt thành công!', 'success');
+
+    try {
+        const token = await getAccessToken();
+        const ok = await saveSettingsToSheet(newSettings, token);
+        if (ok) {
+            showToast('Đã lưu & ghi vào Google Sheet CAI_DAT thành công!', 'success');
+        } else {
+            showToast('Đã lưu cục bộ (chưa ghi được lên Sheet CAI_DAT)', 'info');
+        }
+    } catch (e) {
+        console.error('Lỗi khi ghi Sheet CAI_DAT:', e);
+        showToast('Đã lưu cục bộ (Lỗi ghi Google Sheet: ' + e.message + ')', 'info');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = oldBtnContent;
+            lucide.createIcons();
+        }
+    }
 }
 
-function resetSystemSettings() {
+async function resetSystemSettings() {
     if (!confirm('Khôi phục toàn bộ cài đặt hệ thống về trạng thái mặc định ban đầu?')) return;
-    saveSystemSettings(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+    const def = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    saveSystemSettings(def);
     populateSettingsUI();
-    showToast('Đã khôi phục cài đặt mặc định!', 'info');
+    showToast('Đang khôi phục cài đặt và cập nhật Sheet CAI_DAT...', 'info');
+    try {
+        const token = await getAccessToken();
+        await saveSettingsToSheet(def, token);
+        showToast('Đã khôi phục cài đặt mặc định và lưu vào Google Sheet CAI_DAT!', 'success');
+    } catch (e) {
+        showToast('Đã khôi phục cài đặt mặc định!', 'info');
+    }
 }
 
 function exportSettingsJSON() {
@@ -2088,14 +2267,17 @@ function exportSettingsJSON() {
     });
 }
 
-function importSettingsJSON() {
+async function importSettingsJSON() {
     const input = prompt('Dán chuỗi cấu hình JSON vào đây:');
     if (!input) return;
     try {
         const parsed = JSON.parse(input);
         saveSystemSettings(parsed);
         populateSettingsUI();
-        showToast('Đã nạp cấu hình thành công!', 'success');
+        showToast('Đang lưu cấu hình lên Google Sheet...', 'info');
+        const token = await getAccessToken();
+        await saveSettingsToSheet(parsed, token);
+        showToast('Đã nạp và đồng bộ lên Google Sheet CAI_DAT thành công!', 'success');
     } catch (e) {
         showToast('Chuỗi JSON không hợp lệ: ' + e.message, 'error');
     }
@@ -2105,6 +2287,15 @@ async function init() {
     applySystemSettingsToUI();
     lucide.createIcons();
     initDragAndDrop();
+
+    // Đồng bộ cài đặt từ Google Sheet CAI_DAT lúc khởi động
+    try {
+        const token = await getAccessToken();
+        await loadSettingsFromSheet(token);
+    } catch (e) {
+        console.warn('Không tải được cài đặt từ Sheet CAI_DAT lúc khởi động:', e);
+    }
+
     if (UP_PARAM) {
         await fetchData();
     } else {
