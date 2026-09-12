@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.9">
+    <link rel="stylesheet" href="style.css?v=3.0">
 </head>
 
 <body>
@@ -285,7 +285,7 @@
                                     <span class="settings-card-title">
                                         <i data-lucide="columns" style="width: 20px; color: var(--primary);"></i> Chọn Tab Cần Cấu Hình Cột:
                                     </span>
-                                    <select id="columnSettingsTabSelect" class="settings-input" style="width: auto; font-weight: 700; color: var(--primary);" onchange="renderColumnSettingsList()">
+                                    <select id="columnSettingsTabSelect" class="settings-input" style="width: auto; font-weight: 700; color: var(--primary);" onchange="onColumnTabSelectChange()">
                                         <option value="DATA">DATA (Dữ Liệu AFF)</option>
                                         <option value="TK_AFF">TK_AFF (Tài Khoản)</option>
                                         <option value="PAY">PAY (Chi Trả)</option>
@@ -603,7 +603,7 @@
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
-    <script src="script.js?v=2.9"></script>
+    <script src="script.js?v=3.0"></script>
 </body>
 
 </html>

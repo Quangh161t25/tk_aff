@@ -85,15 +85,14 @@ jWGRDHx//vnfM3DTa5v6Vxw=
             imgCol: -1
         },
         'PAY': {
-            range: 'PAY!A2:D',
-            clearRange: 'PAY!A2:D10000',
-            headers: ['id', 'ngay', 'tk', 'so_tien'],
-            visibleCols: [1, 2, 3],
+            range: 'PAY!A1:ZZ',
+            clearRange: 'PAY!A2:ZZ10000',
+            headers: [],
             priceCols: [3],
             imgCol: -1
         },
         'DASHBOARD': {
-            range: 'DATA!A2:L'
+            range: 'DATA!A1:ZZ'
         }
     }
 };
@@ -384,8 +383,8 @@ async function fetchData() {
         const actualSheetTitle = await getActualSheetTitle(currentTab, token);
         const tabConfig = CONFIG.tabs[currentTab];
 
-        if (currentTab === 'TK_AFF' || currentTab === 'DATA') {
-            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF hoặc DATA
+        if (currentTab === 'TK_AFF' || currentTab === 'DATA' || currentTab === 'PAY') {
+            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF, DATA hoặc PAY
             const range = formatSheetRange(actualSheetTitle, 'A1:ZZ');
             const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -410,9 +409,10 @@ async function fetchData() {
                     headers.push(h || `Cột ${i + 1}`);
                 }
 
-                const defaultHeaders = currentTab === 'TK_AFF' 
-                    ? ['id', 'Tên TK', 'mail'] 
-                    : ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
+                let defaultHeaders = ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang', 'tổng'];
+                if (currentTab === 'TK_AFF') defaultHeaders = ['id', 'Tên TK', 'mail', 'Video', 'da'];
+                if (currentTab === 'PAY') defaultHeaders = ['id', 'ngay', 'Tài Khoản', 'Tiền', 'udt', 'lb1', 'lb2', 'lb3', 'lb4', 'lb5', 'lb6', 'lb7'];
+
                 tabConfig.headers = headers.length > 0 ? headers : defaultHeaders;
                 const rawRows = allRows.slice(1);
                 allData = rawRows.map((row, i) => {
@@ -424,14 +424,15 @@ async function fetchData() {
                     return arr;
                 });
             } else {
-                tabConfig.headers = currentTab === 'TK_AFF' 
-                    ? ['id', 'Tên TK', 'mail'] 
-                    : ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
+                let defaultHeaders = ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang', 'tổng'];
+                if (currentTab === 'TK_AFF') defaultHeaders = ['id', 'Tên TK', 'mail', 'Video', 'da'];
+                if (currentTab === 'PAY') defaultHeaders = ['id', 'ngay', 'Tài Khoản', 'Tiền', 'udt', 'lb1', 'lb2', 'lb3', 'lb4', 'lb5', 'lb6', 'lb7'];
+                tabConfig.headers = defaultHeaders;
                 allData = [];
             }
 
-            // Fetch account names for mapping if in DATA
-            if (currentTab === 'DATA') {
+            // Fetch account names for mapping if in DATA or PAY
+            if (currentTab === 'DATA' || currentTab === 'PAY') {
                 try {
                     const affSheetName = await getActualSheetTitle('TK_AFF', token);
                     const affRange = formatSheetRange(affSheetName, 'A2:B');
@@ -445,21 +446,15 @@ async function fetchData() {
                 } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
             }
         } else {
-            // Fetch main data for DASHBOARD or PAY
-            let dataRange = 'A2:D';
-            if (currentTab === 'DASHBOARD') {
-                const dataSheetTitle = await getActualSheetTitle('DATA', token);
-                dataRange = formatSheetRange(dataSheetTitle, 'A1:ZZ');
-            } else {
-                dataRange = formatSheetRange(actualSheetTitle, 'A2:D');
-            }
+            // Fetch main data for DASHBOARD
+            const dataSheetTitle = await getActualSheetTitle('DATA', token);
+            const dataRange = formatSheetRange(dataSheetTitle, 'A1:ZZ');
 
             const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(dataRange)}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
 
-            // Fetch account names for mapping if in DASHBOARD or PAY
             let AFFNamesMap = {};
             try {
                 const affSheetName = await getActualSheetTitle('TK_AFF', token);
@@ -472,9 +467,7 @@ async function fetchData() {
                 window._AFFNamesMap = AFFNamesMap; // Cache globally
             } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
 
-            const rawRows = (currentTab === 'DASHBOARD' && (data.values || []).length > 0)
-                ? (data.values || []).slice(1)
-                : (data.values || []);
+            const rawRows = (data.values || []).length > 0 ? (data.values || []).slice(1) : [];
 
             allData = rawRows.map((row, i) => {
                 const arr = Array.isArray(row) ? row.slice() : [];
@@ -701,34 +694,7 @@ function renderDashboard(dataData, payData = []) {
 }
 
 function getActiveColumnConfigs(tabKey) {
-    const tabConfig = CONFIG.tabs[tabKey];
-    const sheetHeaders = tabConfig?.headers || [];
-    let savedCols = SYSTEM_SETTINGS.columns?.[tabKey];
-
-    if (!savedCols || !Array.isArray(savedCols) || savedCols.length === 0) {
-        return sheetHeaders.map((h, idx) => ({
-            originalIdx: idx,
-            originalName: h,
-            label: h,
-            visible: true
-        }));
-    }
-
-    // Sync any columns newly added to sheet
-    const existingOriginalIndices = new Set(savedCols.map(c => c.originalIdx));
-    const merged = [...savedCols];
-    sheetHeaders.forEach((h, idx) => {
-        if (!existingOriginalIndices.has(idx)) {
-            merged.push({
-                originalIdx: idx,
-                originalName: h,
-                label: h,
-                visible: true
-            });
-        }
-    });
-
-    return merged.filter(c => c.visible);
+    return getAllColumnsForTab(tabKey).filter(c => c.visible !== false);
 }
 
 function renderHeaders() {
@@ -1876,8 +1842,59 @@ function switchSettingsSubTab(subTabName) {
 
     if (subTabName === 'columns') {
         renderColumnSettingsList();
+        getAccessToken().then(token => loadAllTabHeaders(token)).then(() => renderColumnSettingsList()).catch(() => {});
     }
     lucide.createIcons();
+}
+
+async function loadAllTabHeaders(token) {
+    if (!token) token = await getAccessToken();
+    const tabsToLoad = ['TK_AFF', 'DATA', 'PAY'];
+    await Promise.all(tabsToLoad.map(async (tabKey) => {
+        try {
+            const actualSheetTitle = await getActualSheetTitle(tabKey, token);
+            const range = formatSheetRange(actualSheetTitle, 'A1:ZZ1');
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const headerRow = data.values?.[0] || [];
+                let lastValidHeaderIdx = -1;
+                for (let i = headerRow.length - 1; i >= 0; i--) {
+                    if (headerRow[i] !== undefined && headerRow[i] !== null && String(headerRow[i]).trim() !== '') {
+                        lastValidHeaderIdx = i;
+                        break;
+                    }
+                }
+                if (lastValidHeaderIdx >= 0) {
+                    const headers = [];
+                    for (let i = 0; i <= lastValidHeaderIdx; i++) {
+                        const h = headerRow[i] !== undefined && headerRow[i] !== null ? String(headerRow[i]).trim() : '';
+                        headers.push(h || `Cột ${i + 1}`);
+                    }
+                    if (CONFIG.tabs[tabKey]) {
+                        CONFIG.tabs[tabKey].headers = headers;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`Không tải được header cho tab ${tabKey}:`, e);
+        }
+    }));
+}
+
+async function onColumnTabSelectChange() {
+    renderColumnSettingsList();
+    const select = document.getElementById('columnSettingsTabSelect');
+    const tabKey = select ? select.value : 'DATA';
+    if (!CONFIG.tabs[tabKey]?.headers?.length) {
+        try {
+            const token = await getAccessToken();
+            await loadAllTabHeaders(token);
+            renderColumnSettingsList();
+        } catch (_) {}
+    }
 }
 
 function populateSettingsUI() {
@@ -1911,11 +1928,11 @@ function getAllColumnsForTab(tabKey) {
     // Nếu chưa load headers từ sheet thì lấy headers mặc định
     if (!sheetHeaders.length) {
         if (tabKey === 'DATA') {
-            sheetHeaders = ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
+            sheetHeaders = ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang', 'tổng'];
         } else if (tabKey === 'TK_AFF') {
-            sheetHeaders = ['id', 'Tên TK', 'mail'];
+            sheetHeaders = ['id', 'Tên TK', 'mail', 'Video', 'da'];
         } else if (tabKey === 'PAY') {
-            sheetHeaders = ['id', 'ngay', 'tk', 'so_tien'];
+            sheetHeaders = ['id', 'ngay', 'Tài Khoản', 'Tiền', 'udt', 'lb1', 'lb2', 'lb3', 'lb4', 'lb5', 'lb6', 'lb7'];
         }
     }
 
@@ -1930,11 +1947,28 @@ function getAllColumnsForTab(tabKey) {
         }));
     }
 
-    const existingOriginalIndices = new Set(savedCols.map(c => c.originalIdx));
-    const merged = [...savedCols];
+    const existingOriginalIndices = new Set();
+    const resultCols = [];
+
+    // 1. Duyệt qua các cột đã lưu
+    savedCols.forEach(sc => {
+        if (sc.originalIdx < sheetHeaders.length) {
+            existingOriginalIndices.add(sc.originalIdx);
+            const actualName = sheetHeaders[sc.originalIdx];
+            const label = (sc.label !== undefined && sc.label !== null && sc.label !== '') ? sc.label : actualName;
+            resultCols.push({
+                originalIdx: sc.originalIdx,
+                originalName: actualName,
+                label: label,
+                visible: sc.visible !== false
+            });
+        }
+    });
+
+    // 2. Bổ sung các cột mới có trên sheet mà chưa có trong savedCols (ví dụ Video, da...)
     sheetHeaders.forEach((h, idx) => {
         if (!existingOriginalIndices.has(idx)) {
-            merged.push({
+            resultCols.push({
                 originalIdx: idx,
                 originalName: h,
                 label: h,
@@ -1942,7 +1976,8 @@ function getAllColumnsForTab(tabKey) {
             });
         }
     });
-    return merged;
+
+    return resultCols;
 }
 
 function renderColumnSettingsList() {
@@ -2297,12 +2332,18 @@ async function init() {
     // Chuyển sang tab ngay lập tức
     await switchTab(initialTab);
 
-    // Đồng bộ cài đặt từ Google Sheet CAI_DAT ở nền
+    // Đồng bộ cài đặt từ Google Sheet CAI_DAT và nạp header tất cả các tab ở nền
     try {
         const token = await getAccessToken();
-        await loadSettingsFromSheet(token);
+        await Promise.all([
+            loadAllTabHeaders(token),
+            loadSettingsFromSheet(token)
+        ]);
+        if (currentTab === 'SETTINGS') {
+            populateSettingsUI();
+        }
     } catch (e) {
-        console.warn('Không tải được cài đặt từ Sheet CAI_DAT lúc khởi động:', e);
+        console.warn('Không tải được cài đặt/headers từ Google Sheet lúc khởi động:', e);
     }
 }
 
