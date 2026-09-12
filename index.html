@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2.6">
+    <link rel="stylesheet" href="style.css?v=2.7">
 </head>
 
 <body>
@@ -51,6 +51,10 @@
                 <div class="tab" onclick="switchTab('PAY')" title="PAY">
                     <i data-lucide="credit-card"></i>
                     <span class="tab-text">PAY</span>
+                </div>
+                <div class="tab" onclick="switchTab('SETTINGS')" title="Cài Đặt">
+                    <i data-lucide="settings"></i>
+                    <span class="tab-text">CÀI ĐẶT</span>
                 </div>
             </div>
         </div>
@@ -189,6 +193,183 @@
                         <div style="position: relative; height: 300px; width: 100%;">
                             <canvas id="tkBarChart"></canvas>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Cài Đặt -->
+            <div id="settingsWrapper" style="display: none; height: 100%; overflow-y: auto; padding-top: 5px;">
+                <div class="settings-container">
+                    <div class="settings-subtabs">
+                        <button class="settings-subtab-btn active" onclick="switchSettingsSubTab('general')" id="subtabBtn_general">
+                            <i data-lucide="sliders" style="width: 16px;"></i> Tên & Module
+                        </button>
+                        <button class="settings-subtab-btn" onclick="switchSettingsSubTab('columns')" id="subtabBtn_columns">
+                            <i data-lucide="table" style="width: 16px;"></i> Cấu Hình Cột Dữ Liệu
+                        </button>
+                        <button class="settings-subtab-btn" onclick="switchSettingsSubTab('display')" id="subtabBtn_display">
+                            <i data-lucide="eye" style="width: 16px;"></i> Hiển Thị & Phân Trang
+                        </button>
+                        <button class="settings-subtab-btn" onclick="switchSettingsSubTab('backup')" id="subtabBtn_backup">
+                            <i data-lucide="database" style="width: 16px;"></i> Sao Lưu & Khôi Phục
+                        </button>
+                    </div>
+
+                    <!-- SubTab 1: Tên & Module -->
+                    <div id="subtab_general" class="settings-subtab-content">
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">
+                                    <i data-lucide="type" style="width: 20px; color: var(--primary);"></i> Tên Hệ Thống & Tên Hiển Thị
+                                </span>
+                            </div>
+                            <div class="settings-form-group">
+                                <label class="settings-label">Tên Tiêu Đề Hệ Thống (Logo Title)</label>
+                                <input type="text" id="set_appTitle" class="settings-input" placeholder="Ví dụ: AFF ĐỨC...">
+                                <small style="color: #64748b; font-size: 0.75rem; margin-top: 4px; display: block;">Tên này hiển thị ở góc trên cùng của thanh Menu Sidebar bên trái.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-card" style="margin-top: 15px;">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">
+                                    <i data-lucide="layout-grid" style="width: 20px; color: var(--primary);"></i> Tên & Trạng Thái Các Module
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
+                                <div class="settings-card" style="background: #f8fafc; border-color: #e2e8f0; padding: 15px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <b style="font-size: 0.9rem; color: #1e293b;">Module DASHBOARD</b>
+                                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                            <input type="checkbox" id="set_vis_DASHBOARD" checked> Hiện trên menu
+                                        </label>
+                                    </div>
+                                    <input type="text" id="set_name_DASHBOARD" class="settings-input" placeholder="Tên hiển thị DASHBOARD">
+                                </div>
+                                <div class="settings-card" style="background: #f8fafc; border-color: #e2e8f0; padding: 15px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <b style="font-size: 0.9rem; color: #1e293b;">Module TK_AFF</b>
+                                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                            <input type="checkbox" id="set_vis_TK_AFF" checked> Hiện trên menu
+                                        </label>
+                                    </div>
+                                    <input type="text" id="set_name_TK_AFF" class="settings-input" placeholder="Tên hiển thị TK_AFF">
+                                </div>
+                                <div class="settings-card" style="background: #f8fafc; border-color: #e2e8f0; padding: 15px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <b style="font-size: 0.9rem; color: #1e293b;">Module DATA</b>
+                                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                            <input type="checkbox" id="set_vis_DATA" checked> Hiện trên menu
+                                        </label>
+                                    </div>
+                                    <input type="text" id="set_name_DATA" class="settings-input" placeholder="Tên hiển thị DATA">
+                                </div>
+                                <div class="settings-card" style="background: #f8fafc; border-color: #e2e8f0; padding: 15px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                        <b style="font-size: 0.9rem; color: #1e293b;">Module PAY</b>
+                                        <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                            <input type="checkbox" id="set_vis_PAY" checked> Hiện trên menu
+                                        </label>
+                                    </div>
+                                    <input type="text" id="set_name_PAY" class="settings-input" placeholder="Tên hiển thị PAY">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SubTab 2: Cấu hình Cột -->
+                    <div id="subtab_columns" class="settings-subtab-content" style="display: none;">
+                        <div class="settings-card">
+                            <div class="settings-card-header" style="flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                    <span class="settings-card-title">
+                                        <i data-lucide="columns" style="width: 20px; color: var(--primary);"></i> Chọn Tab Cần Cấu Hình Cột:
+                                    </span>
+                                    <select id="columnSettingsTabSelect" class="settings-input" style="width: auto; font-weight: 700; color: var(--primary);" onchange="renderColumnSettingsList()">
+                                        <option value="DATA">DATA (Dữ Liệu AFF)</option>
+                                        <option value="TK_AFF">TK_AFF (Tài Khoản)</option>
+                                        <option value="PAY">PAY (Chi Trả)</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <button type="button" class="settings-subtab-btn" onclick="toggleAllColumns(true)" style="padding: 5px 10px; font-size: 0.75rem;">Hiện tất cả</button>
+                                    <button type="button" class="settings-subtab-btn" onclick="toggleAllColumns(false)" style="padding: 5px 10px; font-size: 0.75rem;">Ẩn tất cả</button>
+                                    <button type="button" class="settings-subtab-btn" onclick="resetCurrentTabColumns()" style="padding: 5px 10px; font-size: 0.75rem; color: #ef4444;">Đặt lại cột tab này</button>
+                                </div>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 15px;">
+                                💡 Bạn có thể <b>Đổi tên hiển thị</b>, tích chọn <b>Hiện / Ẩn</b> và dùng nút <b>⬆️ Lên / ⬇️ Xuống</b> để sắp xếp lại thứ tự hiển thị cột trên bảng dữ liệu.
+                            </p>
+                            <div id="columnsListContainer" style="max-height: 480px; overflow-y: auto; padding-right: 5px;">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SubTab 3: Hiển thị & Phân trang -->
+                    <div id="subtab_display" class="settings-subtab-content" style="display: none;">
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">
+                                    <i data-lucide="file-spreadsheet" style="width: 20px; color: var(--primary);"></i> Phân Trang & Sắp Xếp Dữ Liệu
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                                <div class="settings-form-group">
+                                    <label class="settings-label">Số dòng hiển thị trên mỗi trang</label>
+                                    <select id="set_rowsPerPage" class="settings-input">
+                                        <option value="25">25 dòng / trang</option>
+                                        <option value="50">50 dòng / trang</option>
+                                        <option value="100">100 dòng / trang (Mặc định)</option>
+                                        <option value="200">200 dòng / trang</option>
+                                        <option value="500">500 dòng / trang</option>
+                                        <option value="10000">Tất cả (Không phân trang)</option>
+                                    </select>
+                                </div>
+                                <div class="settings-form-group">
+                                    <label class="settings-label">Thứ tự sắp xếp ngày mặc định</label>
+                                    <select id="set_defaultSort" class="settings-input">
+                                        <option value="desc">Mới nhất trước (Giảm dần - Mặc định)</option>
+                                        <option value="asc">Cũ nhất trước (Tăng dần)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SubTab 4: Sao Lưu & Khôi Phục -->
+                    <div id="subtab_backup" class="settings-subtab-content" style="display: none;">
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-title">
+                                    <i data-lucide="archive" style="width: 20px; color: var(--primary);"></i> Quản Lý & Xuất Nhập Cấu Hình
+                                </span>
+                            </div>
+                            <p style="font-size: 0.85rem; color: #475569; margin-bottom: 15px;">
+                                Bạn có thể sao lưu cấu hình tùy chỉnh để chuyển sang máy khác hoặc nạp lại khi cần.
+                            </p>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button type="button" onclick="exportSettingsJSON()" class="settings-subtab-btn" style="background: #e0e7ff; color: var(--primary);">
+                                    <i data-lucide="download" style="width: 16px;"></i> Sao Chép Cấu Hình (JSON)
+                                </button>
+                                <button type="button" onclick="importSettingsJSON()" class="settings-subtab-btn" style="background: #fef3c7; color: #b45309;">
+                                    <i data-lucide="upload" style="width: 16px;"></i> Nạp Cấu Hình (JSON)
+                                </button>
+                                <button type="button" onclick="resetSystemSettings()" class="btn-reset-settings">
+                                    <i data-lucide="rotate-ccw" style="width: 16px;"></i> Khôi Phục Mặc Định Toàn Bộ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thanh nút Lưu ở chân trang -->
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+                        <button type="button" onclick="resetSystemSettings()" class="btn-reset-settings">
+                            <i data-lucide="rotate-ccw" style="width: 16px;"></i> Đặt Lại Mặc Định
+                        </button>
+                        <button type="button" onclick="saveAllSettingsFromUI()" class="btn-save-settings">
+                            <i data-lucide="save" style="width: 16px;"></i> Lưu & Áp Dụng Cài Đặt
+                        </button>
                     </div>
                 </div>
             </div>
@@ -406,7 +587,7 @@
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
-    <script src="script.js?v=2.6"></script>
+    <script src="script.js?v=2.7"></script>
 </body>
 
 </html>

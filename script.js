@@ -102,7 +102,94 @@ jWGRDHx//vnfM3DTa5v6Vxw=
 const UP_PARAM = new URLSearchParams(window.location.search).get('up') || '';
 
 const JOY_TAB_STORAGE_KEY = 'AFFActiveTab';
-const JOY_VALID_TABS = ['TK_AFF', 'DATA', 'DASHBOARD', 'PAY'];
+const JOY_VALID_TABS = ['TK_AFF', 'DATA', 'DASHBOARD', 'PAY', 'SETTINGS'];
+
+const SETTINGS_STORAGE_KEY = 'AFF_SYSTEM_SETTINGS_V1';
+
+const DEFAULT_SETTINGS = {
+    appTitle: 'AFF ĐỨC',
+    moduleNames: {
+        'DASHBOARD': 'DASHBOARD',
+        'TK_AFF': 'TK_AFF',
+        'DATA': 'DATA',
+        'PAY': 'PAY',
+        'SETTINGS': 'CÀI ĐẶT'
+    },
+    moduleVisibility: {
+        'DASHBOARD': true,
+        'TK_AFF': true,
+        'DATA': true,
+        'PAY': true,
+        'SETTINGS': true
+    },
+    columns: {},
+    rowsPerPage: 100,
+    defaultSort: 'desc'
+};
+
+let SYSTEM_SETTINGS = loadSystemSettings();
+
+function loadSystemSettings() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            return {
+                ...DEFAULT_SETTINGS,
+                ...parsed,
+                moduleNames: { ...DEFAULT_SETTINGS.moduleNames, ...(parsed.moduleNames || {}) },
+                moduleVisibility: { ...DEFAULT_SETTINGS.moduleVisibility, ...(parsed.moduleVisibility || {}) },
+                columns: { ...(parsed.columns || {}) }
+            };
+        }
+    } catch (e) {
+        console.warn('Lỗi đọc settings từ localStorage:', e);
+    }
+    return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+}
+
+function saveSystemSettings(settings) {
+    SYSTEM_SETTINGS = settings;
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+        console.warn('Lỗi lưu settings vào localStorage:', e);
+    }
+    applySystemSettingsToUI();
+}
+
+function getModuleName(tabKey) {
+    return (SYSTEM_SETTINGS.moduleNames && SYSTEM_SETTINGS.moduleNames[tabKey]) || tabKey;
+}
+
+function applySystemSettingsToUI() {
+    // Cập nhật tên logo hệ thống trên Sidebar
+    const brandTitle = document.querySelector('.sidebar-title');
+    if (brandTitle) brandTitle.innerText = SYSTEM_SETTINGS.appTitle || 'AFF ĐỨC';
+
+    // Cập nhật tên các tab trên Sidebar và ẩn/hiện tab
+    const tabsList = document.querySelectorAll('.sidebar .tab');
+    tabsList.forEach(t => {
+        const onclickAttr = t.getAttribute('onclick') || '';
+        const match = onclickAttr.match(/switchTab\('([^']+)'\)/);
+        if (match) {
+            const tabKey = match[1];
+            const textSpan = t.querySelector('.tab-text');
+            if (textSpan) {
+                textSpan.innerText = getModuleName(tabKey);
+            }
+            t.setAttribute('title', getModuleName(tabKey));
+
+            const isVisible = SYSTEM_SETTINGS.moduleVisibility[tabKey] !== false;
+            t.style.display = isVisible ? 'flex' : 'none';
+        }
+    });
+
+    // Cập nhật rowsPerPage
+    if (SYSTEM_SETTINGS.rowsPerPage) {
+        rowsPerPage = Number(SYSTEM_SETTINGS.rowsPerPage) || 100;
+    }
+}
 
 let currentTab = 'DASHBOARD', allData = [], accessToken = null, tokenExpiry = 0;
 let currentPage = 1, rowsPerPage = 100, filteredData = [];
@@ -185,41 +272,55 @@ async function switchTab(tabName) {
     if (JOY_VALID_TABS.includes(tabName)) {
         try { sessionStorage.setItem(JOY_TAB_STORAGE_KEY, tabName); } catch (_) { /* ignore */ }
     }
-    const uploadBtn = document.getElementById('uploadBtn');
-    const statsGrid = document.getElementById('statsGrid');
-    const tabLabels = {
-        'TK_AFF': 'TK_AFF',
-        'DATA': 'DATA',
-        'DASHBOARD': 'DASHBOARD',
-        'PAY': 'PAY'
-    };
 
-    document.querySelectorAll('.tab').forEach(t => {
+    document.querySelectorAll('.sidebar .tab').forEach(t => {
         t.classList.remove('active');
-        if (t.innerText === tabLabels[tabName]) t.classList.add('active');
+        const onclickAttr = t.getAttribute('onclick') || '';
+        if (onclickAttr.includes(`switchTab('${tabName}')`)) t.classList.add('active');
     });
 
     const tableWrapper = document.getElementById('tableWrapper');
     const pagination = document.getElementById('pagination');
     const headerActions = document.getElementById('headerActions');
     const pageTitle = document.getElementById('pageTitle');
-
     const searchContainer = document.querySelector('.search-container');
     const addBtn = document.getElementById('addBtn');
+    const dashboardWrapper = document.getElementById('dashboardWrapper');
+    const settingsWrapper = document.getElementById('settingsWrapper');
+    const statsGrid = document.getElementById('statsGrid');
+    const dataFilters = document.getElementById('dataFilters');
 
-    // Show standard UI
+    pageTitle.innerText = getModuleName(tabName);
+
+    if (tabName === 'SETTINGS') {
+        if (tableWrapper) tableWrapper.style.display = 'none';
+        if (pagination) pagination.style.display = 'none';
+        if (headerActions) headerActions.style.display = 'none';
+        if (dashboardWrapper) dashboardWrapper.style.display = 'none';
+        if (statsGrid) statsGrid.style.display = 'none';
+        if (settingsWrapper) settingsWrapper.style.display = 'block';
+        populateSettingsUI();
+        lucide.createIcons();
+        return;
+    }
+
+    if (settingsWrapper) settingsWrapper.style.display = 'none';
+    if (headerActions) headerActions.style.display = 'flex';
+
     if (tabName === 'DASHBOARD') {
-        tableWrapper.style.display = 'none';
-        pagination.style.display = 'none';
-        headerActions.style.display = 'flex';
+        if (tableWrapper) tableWrapper.style.display = 'none';
+        if (pagination) pagination.style.display = 'none';
         if (searchContainer) searchContainer.style.display = 'none';
         if (addBtn) addBtn.style.display = 'none';
+        if (dashboardWrapper) dashboardWrapper.style.display = 'block';
+        if (statsGrid) statsGrid.style.display = 'none';
+        if (dataFilters) dataFilters.style.display = 'flex';
     } else {
-        tableWrapper.style.display = 'block';
-        pagination.style.display = 'flex';
-        headerActions.style.display = 'flex';
+        if (tableWrapper) tableWrapper.style.display = 'block';
+        if (pagination) pagination.style.display = 'flex';
         if (searchContainer) searchContainer.style.display = 'flex';
         if (addBtn) addBtn.style.display = 'flex';
+        if (dashboardWrapper) dashboardWrapper.style.display = 'none';
     }
 
     const statClick = document.getElementById('statClick');
@@ -228,7 +329,6 @@ async function switchTab(tabName) {
     const statLuotBan = document.getElementById('statLuotBan');
     const statGmv = document.getElementById('statGmv');
     const statPay = document.getElementById('statPay');
-    const dataFilters = document.getElementById('dataFilters');
 
     if (tabName === 'DATA') {
         if (statsGrid) statsGrid.style.display = 'grid';
@@ -248,17 +348,10 @@ async function switchTab(tabName) {
         if (statGmv) statGmv.style.display = 'none';
         if (statPay) statPay.style.display = 'block';
         if (dataFilters) dataFilters.style.display = 'flex';
-    } else {
+    } else if (tabName !== 'DASHBOARD') {
         if (statsGrid) statsGrid.style.display = 'none';
-        if (dataFilters) dataFilters.style.display = tabName === 'DASHBOARD' ? 'flex' : 'none';
+        if (dataFilters) dataFilters.style.display = 'none';
     }
-
-    const dashboardWrapper = document.getElementById('dashboardWrapper');
-    if (dashboardWrapper) {
-        dashboardWrapper.style.display = tabName === 'DASHBOARD' ? 'block' : 'none';
-    }
-
-    pageTitle.innerText = tabName;
 
     document.getElementById('searchInput').value = '';
     if (document.getElementById('monthFilter')) document.getElementById('monthFilter').value = '';
@@ -593,15 +686,43 @@ function renderDashboard(dataData, payData = []) {
     });
 }
 
+function getActiveColumnConfigs(tabKey) {
+    const tabConfig = CONFIG.tabs[tabKey];
+    const sheetHeaders = tabConfig?.headers || [];
+    let savedCols = SYSTEM_SETTINGS.columns?.[tabKey];
+
+    if (!savedCols || !Array.isArray(savedCols) || savedCols.length === 0) {
+        return sheetHeaders.map((h, idx) => ({
+            originalIdx: idx,
+            originalName: h,
+            label: h,
+            visible: true
+        }));
+    }
+
+    // Sync any columns newly added to sheet
+    const existingOriginalIndices = new Set(savedCols.map(c => c.originalIdx));
+    const merged = [...savedCols];
+    sheetHeaders.forEach((h, idx) => {
+        if (!existingOriginalIndices.has(idx)) {
+            merged.push({
+                originalIdx: idx,
+                originalName: h,
+                label: h,
+                visible: true
+            });
+        }
+    });
+
+    return merged.filter(c => c.visible);
+}
+
 function renderHeaders() {
     const head = document.getElementById('tableHead');
-    const tabConfig = CONFIG.tabs[currentTab];
-    const visibleCols = tabConfig.visibleCols;
-    const headers = visibleCols
-        ? visibleCols.map(idx => tabConfig.headers[idx]).filter(Boolean)
-        : [...(tabConfig.headers || [])];
-    headers.push('Xóa');
-    head.innerHTML = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
+    const activeCols = getActiveColumnConfigs(currentTab);
+    const ths = activeCols.map(c => `<th>${escapeHtml(c.label || c.originalName || '')}</th>`);
+    ths.push('<th>Xóa</th>');
+    head.innerHTML = `<tr>${ths.join('')}</tr>`;
 }
 
 function getDataSheetRow(row) {
@@ -827,16 +948,15 @@ function renderTable() {
 
     const tbody = document.getElementById('tableBody');
     const tabConfig = CONFIG.tabs[currentTab];
-    const visibleCols = tabConfig.visibleCols;
+    const activeCols = getActiveColumnConfigs(currentTab);
 
     const start = (currentPage - 1) * rowsPerPage;
     const end = start + rowsPerPage;
     const pageData = filteredData.slice(start, end);
 
-    const colIndices = visibleCols || (tabConfig.headers || []).map((_, idx) => idx);
-
     tbody.innerHTML = pageData.map(row => {
-        const cells = colIndices.map(idx => {
+        const cells = activeCols.map(col => {
+            const idx = col.originalIdx;
             const cell = row[idx];
             if (tabConfig.imgCol !== undefined && tabConfig.imgCol >= 0 && idx === tabConfig.imgCol && cell) {
                 const firstImg = cell.split(',')[0].trim();
@@ -1743,4 +1863,260 @@ async function saveAddDataPay() {
     }
 }
 
+// ==========================================
+// CÀI ĐẶT HỆ THỐNG (SETTINGS MANAGEMENT)
+// ==========================================
+
+function switchSettingsSubTab(subTabName) {
+    document.querySelectorAll('.settings-subtab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.settings-subtab-content').forEach(content => content.style.display = 'none');
+
+    const btn = document.getElementById(`subtabBtn_${subTabName}`);
+    const content = document.getElementById(`subtab_${subTabName}`);
+    if (btn) btn.classList.add('active');
+    if (content) content.style.display = 'block';
+
+    if (subTabName === 'columns') {
+        renderColumnSettingsList();
+    }
+    lucide.createIcons();
+}
+
+function populateSettingsUI() {
+    // App Title
+    const appTitleInput = document.getElementById('set_appTitle');
+    if (appTitleInput) appTitleInput.value = SYSTEM_SETTINGS.appTitle || 'AFF ĐỨC';
+
+    // Module Names & Visibility
+    const modules = ['DASHBOARD', 'TK_AFF', 'DATA', 'PAY'];
+    modules.forEach(m => {
+        const nameInput = document.getElementById(`set_name_${m}`);
+        const visCheck = document.getElementById(`set_vis_${m}`);
+        if (nameInput) nameInput.value = SYSTEM_SETTINGS.moduleNames?.[m] || m;
+        if (visCheck) visCheck.checked = SYSTEM_SETTINGS.moduleVisibility?.[m] !== false;
+    });
+
+    // Display settings
+    const rowsPerPageSelect = document.getElementById('set_rowsPerPage');
+    if (rowsPerPageSelect) rowsPerPageSelect.value = String(SYSTEM_SETTINGS.rowsPerPage || 100);
+
+    const defaultSortSelect = document.getElementById('set_defaultSort');
+    if (defaultSortSelect) defaultSortSelect.value = SYSTEM_SETTINGS.defaultSort || 'desc';
+
+    renderColumnSettingsList();
+}
+
+function getAllColumnsForTab(tabKey) {
+    const tabConfig = CONFIG.tabs[tabKey];
+    let sheetHeaders = tabConfig?.headers || [];
+    
+    // Nếu chưa load headers từ sheet thì lấy headers mặc định
+    if (!sheetHeaders.length) {
+        if (tabKey === 'DATA') {
+            sheetHeaders = ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
+        } else if (tabKey === 'TK_AFF') {
+            sheetHeaders = ['id', 'Tên TK', 'mail'];
+        } else if (tabKey === 'PAY') {
+            sheetHeaders = ['id', 'ngay', 'tk', 'so_tien'];
+        }
+    }
+
+    let savedCols = SYSTEM_SETTINGS.columns?.[tabKey];
+
+    if (!savedCols || !Array.isArray(savedCols) || savedCols.length === 0) {
+        return sheetHeaders.map((h, idx) => ({
+            originalIdx: idx,
+            originalName: h,
+            label: h,
+            visible: true
+        }));
+    }
+
+    const existingOriginalIndices = new Set(savedCols.map(c => c.originalIdx));
+    const merged = [...savedCols];
+    sheetHeaders.forEach((h, idx) => {
+        if (!existingOriginalIndices.has(idx)) {
+            merged.push({
+                originalIdx: idx,
+                originalName: h,
+                label: h,
+                visible: true
+            });
+        }
+    });
+    return merged;
+}
+
+function renderColumnSettingsList() {
+    const select = document.getElementById('columnSettingsTabSelect');
+    const tabKey = select ? select.value : 'DATA';
+    const container = document.getElementById('columnsListContainer');
+    if (!container) return;
+
+    const cols = getAllColumnsForTab(tabKey);
+    if (!cols.length) {
+        container.innerHTML = `<div style="padding: 20px; text-align: center; color: #94a3b8;">Chưa có dữ liệu cột cho tab này.</div>`;
+        return;
+    }
+
+    container.innerHTML = cols.map((col, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === cols.length - 1;
+        return `
+            <div class="settings-col-item" data-idx="${idx}">
+                <div class="settings-col-info">
+                    <span class="badge" style="min-width: 28px; text-align: center;">${idx + 1}</span>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: #1e293b; min-width: 140px;">
+                        <input type="checkbox" onchange="toggleColumnVisibility('${tabKey}', ${idx}, this.checked)" ${col.visible ? 'checked' : ''}>
+                        <span>${escapeHtml(col.originalName || `Cột ${col.originalIdx + 1}`)}</span>
+                    </label>
+                    <input type="text" class="settings-input" style="padding: 5px 10px; font-size: 0.85rem; max-width: 250px;" 
+                        placeholder="Tên hiển thị..." value="${escapeHtml(col.label || col.originalName || '')}" 
+                        oninput="updateColumnLabel('${tabKey}', ${idx}, this.value)">
+                </div>
+                <div class="settings-col-actions">
+                    <button type="button" class="btn-move" onclick="moveColumnSetting('${tabKey}', ${idx}, -1)" ${isFirst ? 'disabled' : ''} title="Di chuyển lên">
+                        <i data-lucide="arrow-up" style="width: 14px;"></i>
+                    </button>
+                    <button type="button" class="btn-move" onclick="moveColumnSetting('${tabKey}', ${idx}, 1)" ${isLast ? 'disabled' : ''} title="Di chuyển xuống">
+                        <i data-lucide="arrow-down" style="width: 14px;"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    lucide.createIcons({ elements: [container] });
+}
+
+function toggleColumnVisibility(tabKey, index, isVisible) {
+    const cols = getAllColumnsForTab(tabKey);
+    if (cols[index]) {
+        cols[index].visible = isVisible;
+        if (!SYSTEM_SETTINGS.columns) SYSTEM_SETTINGS.columns = {};
+        SYSTEM_SETTINGS.columns[tabKey] = cols;
+    }
+}
+
+function updateColumnLabel(tabKey, index, newLabel) {
+    const cols = getAllColumnsForTab(tabKey);
+    if (cols[index]) {
+        cols[index].label = newLabel;
+        if (!SYSTEM_SETTINGS.columns) SYSTEM_SETTINGS.columns = {};
+        SYSTEM_SETTINGS.columns[tabKey] = cols;
+    }
+}
+
+function moveColumnSetting(tabKey, index, delta) {
+    const cols = getAllColumnsForTab(tabKey);
+    const targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= cols.length) return;
+
+    const temp = cols[index];
+    cols[index] = cols[targetIndex];
+    cols[targetIndex] = temp;
+
+    if (!SYSTEM_SETTINGS.columns) SYSTEM_SETTINGS.columns = {};
+    SYSTEM_SETTINGS.columns[tabKey] = cols;
+
+    renderColumnSettingsList();
+}
+
+function toggleAllColumns(showAll) {
+    const select = document.getElementById('columnSettingsTabSelect');
+    const tabKey = select ? select.value : 'DATA';
+    const cols = getAllColumnsForTab(tabKey);
+    cols.forEach(c => c.visible = showAll);
+    if (!SYSTEM_SETTINGS.columns) SYSTEM_SETTINGS.columns = {};
+    SYSTEM_SETTINGS.columns[tabKey] = cols;
+    renderColumnSettingsList();
+}
+
+function resetCurrentTabColumns() {
+    const select = document.getElementById('columnSettingsTabSelect');
+    const tabKey = select ? select.value : 'DATA';
+    if (!confirm(`Khôi phục thứ tự và tên hiển thị các cột của tab '${tabKey}' về mặc định?`)) return;
+
+    if (SYSTEM_SETTINGS.columns && SYSTEM_SETTINGS.columns[tabKey]) {
+        delete SYSTEM_SETTINGS.columns[tabKey];
+    }
+    renderColumnSettingsList();
+    showToast(`Đã đặt lại cấu hình cột tab ${tabKey}`, 'info');
+}
+
+function saveAllSettingsFromUI() {
+    const appTitle = document.getElementById('set_appTitle')?.value.trim() || 'AFF ĐỨC';
+    const moduleNames = { ...SYSTEM_SETTINGS.moduleNames };
+    const moduleVisibility = { ...SYSTEM_SETTINGS.moduleVisibility };
+
+    ['DASHBOARD', 'TK_AFF', 'DATA', 'PAY'].forEach(m => {
+        const nameVal = document.getElementById(`set_name_${m}`)?.value.trim();
+        if (nameVal) moduleNames[m] = nameVal;
+        const visCheck = document.getElementById(`set_vis_${m}`);
+        if (visCheck) moduleVisibility[m] = visCheck.checked;
+    });
+
+    const rowsPerPageVal = Number(document.getElementById('set_rowsPerPage')?.value) || 100;
+    const defaultSort = document.getElementById('set_defaultSort')?.value || 'desc';
+
+    const newSettings = {
+        ...SYSTEM_SETTINGS,
+        appTitle,
+        moduleNames,
+        moduleVisibility,
+        rowsPerPage: rowsPerPageVal,
+        defaultSort
+    };
+
+    saveSystemSettings(newSettings);
+    showToast('Đã lưu và áp dụng toàn bộ cài đặt thành công!', 'success');
+}
+
+function resetSystemSettings() {
+    if (!confirm('Khôi phục toàn bộ cài đặt hệ thống về trạng thái mặc định ban đầu?')) return;
+    saveSystemSettings(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+    populateSettingsUI();
+    showToast('Đã khôi phục cài đặt mặc định!', 'info');
+}
+
+function exportSettingsJSON() {
+    const jsonStr = JSON.stringify(SYSTEM_SETTINGS, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+        showToast('Đã sao chép cấu hình JSON vào bộ nhớ tạm (Clipboard)!', 'success');
+    }).catch(() => {
+        prompt('Sao chép cấu hình JSON bên dưới:', jsonStr);
+    });
+}
+
+function importSettingsJSON() {
+    const input = prompt('Dán chuỗi cấu hình JSON vào đây:');
+    if (!input) return;
+    try {
+        const parsed = JSON.parse(input);
+        saveSystemSettings(parsed);
+        populateSettingsUI();
+        showToast('Đã nạp cấu hình thành công!', 'success');
+    } catch (e) {
+        showToast('Chuỗi JSON không hợp lệ: ' + e.message, 'error');
+    }
+}
+
+async function init() {
+    applySystemSettingsToUI();
+    lucide.createIcons();
+    initDragAndDrop();
+    if (UP_PARAM) {
+        await fetchData();
+    } else {
+        let saved = '';
+        try { saved = sessionStorage.getItem(JOY_TAB_STORAGE_KEY) || ''; } catch (_) { }
+        if (saved && JOY_VALID_TABS.includes(saved)) {
+            await switchTab(saved);
+        } else {
+            await fetchData();
+        }
+    }
+}
+
 init();
+
