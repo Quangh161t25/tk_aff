@@ -72,7 +72,7 @@ jWGRDHx//vnfM3DTa5v6Vxw=
     tabs: {
         'TK_AFF': {
             range: 'TK_AFF!A1:ZZ',
-            clearRange: 'TK_AFF!A2:ZZ10000',
+            clearRange: 'TK_AFF!A2:ZZ1000',
             headers: [],
             priceCols: [],
             imgCol: -1
