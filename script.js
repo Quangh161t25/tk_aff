@@ -311,6 +311,8 @@ async function switchTab(tabName) {
         if (dashboardWrapper) dashboardWrapper.style.display = 'none';
         if (statsGrid) statsGrid.style.display = 'none';
         if (settingsWrapper) settingsWrapper.style.display = 'block';
+        const loadingMask = document.getElementById('loading');
+        if (loadingMask) loadingMask.style.display = 'none';
         populateSettingsUI();
         lucide.createIcons();
         return;
@@ -2288,24 +2290,19 @@ async function init() {
     lucide.createIcons();
     initDragAndDrop();
 
-    // Đồng bộ cài đặt từ Google Sheet CAI_DAT lúc khởi động
+    let saved = '';
+    try { saved = sessionStorage.getItem(JOY_TAB_STORAGE_KEY) || ''; } catch (_) { }
+    const initialTab = (saved && JOY_VALID_TABS.includes(saved)) ? saved : (UP_PARAM ? 'TK_AFF' : 'DASHBOARD');
+
+    // Chuyển sang tab ngay lập tức
+    await switchTab(initialTab);
+
+    // Đồng bộ cài đặt từ Google Sheet CAI_DAT ở nền
     try {
         const token = await getAccessToken();
         await loadSettingsFromSheet(token);
     } catch (e) {
         console.warn('Không tải được cài đặt từ Sheet CAI_DAT lúc khởi động:', e);
-    }
-
-    if (UP_PARAM) {
-        await fetchData();
-    } else {
-        let saved = '';
-        try { saved = sessionStorage.getItem(JOY_TAB_STORAGE_KEY) || ''; } catch (_) { }
-        if (saved && JOY_VALID_TABS.includes(saved)) {
-            await switchTab(saved);
-        } else {
-            await fetchData();
-        }
     }
 }
 
