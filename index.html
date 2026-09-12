@@ -67,12 +67,17 @@
                     </div>
 
                     <div id="dataFilters" style="display: none; align-items: center; gap: 8px; flex-shrink: 0;">
+                        <select id="monthFilter" class="search-input"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="onMonthFilterChange()"
+                            title="Lọc theo Tháng">
+                            <option value="">Tất cả Tháng</option>
+                        </select>
                         <input type="date" id="fromDate" class="search-input"
-                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="filterTable()"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="onDateFilterChange()"
                             title="Từ ngày">
                         <span style="font-size: 0.9rem; color: #64748b;">-</span>
                         <input type="date" id="toDate" class="search-input"
-                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="filterTable()"
+                            style="width: auto; padding: 8px 6px; font-size: 0.85rem;" onchange="onDateFilterChange()"
                             title="Đến ngày">
                         <select id="tkFilter" class="search-input"
                             style="width: auto; padding: 8px 6px; font-size: 0.85rem; max-width: 150px;"
@@ -323,33 +328,15 @@
 
     <div id="addModalAFF"
         style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-        <div style="background: white; padding: 25px; border-radius: 12px; width: 400px; max-width: 90%;">
-            <h2 style="margin-bottom: 20px; color: var(--primary);">Thêm Mới TK AFF</h2>
-            <div style="display: flex; flex-direction: column; gap: 15px;">
-                <div>
-                    <label
-                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">ID
-                        *</label>
-                    <input type="text" id="addAFFId" class="search-input" style="width: 100%;" placeholder="Nhập ID...">
-                </div>
-                <div>
-                    <label
-                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Tên
-                        *</label>
-                    <input type="text" id="addAFFTen" class="search-input" style="width: 100%;"
-                        placeholder="Nhập tên...">
-                </div>
-                <div>
-                    <label
-                        style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">Mail</label>
-                    <input type="text" id="addAFFMail" class="search-input" style="width: 100%;"
-                        placeholder="Nhập mail...">
-                </div>
+        <div style="background: white; padding: 25px; border-radius: 12px; width: 650px; max-width: 92%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
+            <h2 id="affModalTitle" style="margin-bottom: 20px; color: var(--primary); font-size: 1.3rem; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; flex-shrink: 0;">Thêm Mới TK AFF</h2>
+            <div id="addAFFFormContainer" style="overflow-y: auto; padding-right: 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; flex: 1;">
+                <!-- Dynamically generated fields for each column header -->
             </div>
-            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px;">
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; flex-shrink: 0; border-top: 1px solid #f1f5f9; padding-top: 15px;">
                 <button onclick="closeAddModalAFF()"
                     style="padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600;">Hủy</button>
-                <button onclick="saveAddDataAFF()"
+                <button id="affSaveBtn" onclick="saveAddDataAFF()"
                     style="padding: 8px 16px; border-radius: 6px; border: none; background: var(--primary); color: #fff; cursor: pointer; font-weight: 600;">Lưu</button>
             </div>
         </div>

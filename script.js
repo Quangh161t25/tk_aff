@@ -71,9 +71,9 @@ sR2Sh8e3h3Knd6j1tceRIFU=
     tokenUrl: "https://oauth2.googleapis.com/token",
     tabs: {
         'TK_AFF': {
-            range: 'TK_AFF!A2:C',
-            clearRange: 'TK_AFF!A2:C10000',
-            headers: ['id', 'ten', 'mail'],
+            range: 'TK_AFF!A1:ZZ',
+            clearRange: 'TK_AFF!A2:ZZ10000',
+            headers: [],
             priceCols: [],
             imgCol: -1
         },
@@ -207,6 +207,10 @@ async function switchTab(tabName) {
             tabName === 'PAY' ? 'QUẢN LÝ CHI TRẢ (PAY)' : 'DỮ LIỆU AFF';
 
     document.getElementById('searchInput').value = '';
+    if (document.getElementById('monthFilter')) document.getElementById('monthFilter').value = '';
+    if (document.getElementById('fromDate')) document.getElementById('fromDate').value = '';
+    if (document.getElementById('toDate')) document.getElementById('toDate').value = '';
+    if (document.getElementById('tkFilter')) document.getElementById('tkFilter').value = '';
     currentPage = 1;
     await fetchData();
 }
@@ -218,28 +222,69 @@ async function fetchData() {
         const token = await getAccessToken();
         const tabConfig = CONFIG.tabs[currentTab];
 
-        // Fetch main data
-        const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${tabConfig.range}`, { headers: { Authorization: `Bearer ${token}` } });
-        const data = await res.json();
+        if (currentTab === 'TK_AFF') {
+            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A1:ZZ`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const allRows = data.values || [];
 
-        // Fetch account names for mapping if in DATA, DASHBOARD or PAY
-        let AFFNamesMap = {};
-        if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
-            try {
-                const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
-                const AFFData = await AFFRes.json();
-                (AFFData.values || []).forEach(r => {
-                    if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
+            if (allRows.length > 0) {
+                const headerRow = allRows[0] || [];
+                // Lấy toàn bộ tên cột có tiêu đề (không rỗng)
+                let lastValidHeaderIdx = -1;
+                for (let i = headerRow.length - 1; i >= 0; i--) {
+                    if (headerRow[i] !== undefined && headerRow[i] !== null && String(headerRow[i]).trim() !== '') {
+                        lastValidHeaderIdx = i;
+                        break;
+                    }
+                }
+
+                const headers = [];
+                for (let i = 0; i <= lastValidHeaderIdx; i++) {
+                    const h = headerRow[i] !== undefined && headerRow[i] !== null ? String(headerRow[i]).trim() : '';
+                    headers.push(h || `Cột ${i + 1}`);
+                }
+
+                tabConfig.headers = headers.length > 0 ? headers : ['id', 'Tên TK', 'mail'];
+                const rawRows = allRows.slice(1);
+                allData = rawRows.map((row, i) => {
+                    const arr = Array.isArray(row) ? row.slice() : [];
+                    while (arr.length < tabConfig.headers.length) {
+                        arr.push('');
+                    }
+                    arr._sheetRow = i + 2;
+                    return arr;
                 });
-                window._AFFNamesMap = AFFNamesMap; // Cache globally
-            } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
+            } else {
+                tabConfig.headers = ['id', 'Tên TK', 'mail'];
+                allData = [];
+            }
+        } else {
+            // Fetch main data
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${tabConfig.range}`, { headers: { Authorization: `Bearer ${token}` } });
+            const data = await res.json();
+
+            // Fetch account names for mapping if in DATA, DASHBOARD or PAY
+            let AFFNamesMap = {};
+            if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
+                try {
+                    const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/TK_AFF!A2:B`, { headers: { Authorization: `Bearer ${token}` } });
+                    const AFFData = await AFFRes.json();
+                    (AFFData.values || []).forEach(r => {
+                        if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
+                    });
+                    window._AFFNamesMap = AFFNamesMap; // Cache globally
+                } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
+            }
+            const rawRows = data.values || [];
+            allData = rawRows.map((row, i) => {
+                const arr = Array.isArray(row) ? row.slice() : [];
+                arr._sheetRow = i + 2;
+                return arr;
+            });
         }
-        const rawRows = data.values || [];
-        allData = rawRows.map((row, i) => {
-            const arr = Array.isArray(row) ? row.slice() : [];
-            arr._sheetRow = i + 2;
-            return arr;
-        });
 
         if (currentTab === 'DASHBOARD') {
             try {
@@ -258,6 +303,28 @@ async function fetchData() {
                 const tB = parseNgayForSort(b[1]);
                 return tB - tA;
             });
+
+            const monthSelect = document.getElementById('monthFilter');
+            if (monthSelect) {
+                const currentMonthVal = monthSelect.value;
+                const monthsSet = new Set();
+                allData.forEach(r => {
+                    const m = getRowMonth(r[1], r[11]);
+                    if (m) monthsSet.add(m);
+                });
+                if (currentTab === 'DASHBOARD' && window._allPayData) {
+                    window._allPayData.forEach(r => {
+                        const m = getRowMonth(r[1], r[11]);
+                        if (m) monthsSet.add(m);
+                    });
+                }
+                const sortedMonths = Array.from(monthsSet).sort(compareMonthKeys);
+                monthSelect.innerHTML = '<option value="">Tất cả Tháng</option>' +
+                    sortedMonths.map(m => `<option value="${m}">Tháng ${m}</option>`).join('');
+                if (sortedMonths.includes(currentMonthVal)) {
+                    monthSelect.value = currentMonthVal;
+                }
+            }
 
             const tkSelect = document.getElementById('tkFilter');
             if (tkSelect) {
@@ -440,9 +507,9 @@ function renderHeaders() {
     const visibleCols = tabConfig.visibleCols;
     const headers = visibleCols
         ? visibleCols.map(idx => tabConfig.headers[idx]).filter(Boolean)
-        : tabConfig.headers;
+        : [...(tabConfig.headers || [])];
     headers.push('Xóa');
-    head.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+    head.innerHTML = `<tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
 }
 
 function getDataSheetRow(row) {
@@ -580,6 +647,65 @@ function parseNgayForSort(raw) {
     return Number.NEGATIVE_INFINITY;
 }
 
+function getRowMonth(ngayRaw, namThangRaw) {
+    if (ngayRaw !== undefined && ngayRaw !== null && String(ngayRaw).trim() !== '') {
+        const ts = parseNgayForSort(ngayRaw);
+        if (Number.isFinite(ts) && ts > 0) {
+            const d = new Date(ts);
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const y = d.getFullYear();
+            return `${m}/${y}`;
+        }
+    }
+    if (namThangRaw !== undefined && namThangRaw !== null && String(namThangRaw).trim() !== '') {
+        const s = String(namThangRaw).trim().replace('-', '/').replace('.', '/');
+        const m = s.match(/^(\d{1,2})\/(\d{4})/);
+        if (m) {
+            return `${String(m[1]).padStart(2, '0')}/${m[2]}`;
+        }
+    }
+    return '';
+}
+
+function compareMonthKeys(a, b) {
+    const [mA, yA] = a.split('/').map(Number);
+    const [mB, yB] = b.split('/').map(Number);
+    if (yA !== yB) return (yB || 0) - (yA || 0);
+    return (mB || 0) - (mA || 0);
+}
+
+function onMonthFilterChange() {
+    const mVal = document.getElementById('monthFilter')?.value;
+    if (mVal) {
+        const [m, y] = mVal.split('/').map(Number);
+        const firstDay = `${y}-${String(m).padStart(2, '0')}-01`;
+        const lastDayNum = new Date(y, m, 0).getDate();
+        const lastDay = `${y}-${String(m).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+        if (document.getElementById('fromDate')) document.getElementById('fromDate').value = firstDay;
+        if (document.getElementById('toDate')) document.getElementById('toDate').value = lastDay;
+    } else {
+        if (document.getElementById('fromDate')) document.getElementById('fromDate').value = '';
+        if (document.getElementById('toDate')) document.getElementById('toDate').value = '';
+    }
+    filterTable();
+}
+
+function onDateFilterChange() {
+    const mSelect = document.getElementById('monthFilter');
+    if (mSelect && mSelect.value) {
+        const [m, y] = mSelect.value.split('/').map(Number);
+        const firstDay = `${y}-${String(m).padStart(2, '0')}-01`;
+        const lastDayNum = new Date(y, m, 0).getDate();
+        const lastDay = `${y}-${String(m).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
+        const fVal = document.getElementById('fromDate')?.value;
+        const tVal = document.getElementById('toDate')?.value;
+        if (fVal !== firstDay || tVal !== lastDay) {
+            mSelect.value = '';
+        }
+    }
+    filterTable();
+}
+
 
 
 function renderTable() {
@@ -613,10 +739,12 @@ function renderTable() {
     const end = start + rowsPerPage;
     const pageData = filteredData.slice(start, end);
 
+    const colIndices = visibleCols || (tabConfig.headers || []).map((_, idx) => idx);
+
     tbody.innerHTML = pageData.map(row => {
-        const cells = (visibleCols || row.map((_, idx) => idx)).map(idx => {
+        const cells = colIndices.map(idx => {
             const cell = row[idx];
-            if (idx === tabConfig.imgCol && cell) {
+            if (tabConfig.imgCol !== undefined && tabConfig.imgCol >= 0 && idx === tabConfig.imgCol && cell) {
                 const firstImg = cell.split(',')[0].trim();
                 return `<td>
                     <div style="display:flex; align-items:center; gap:8px;">
@@ -625,7 +753,7 @@ function renderTable() {
                     </div>
                 </td>`;
             }
-            if (tabConfig.priceCols.includes(idx)) {
+            if (tabConfig.priceCols && tabConfig.priceCols.includes(idx)) {
                 return `<td class="price-cell">${cell === null || cell === undefined ? '' : formatCurrency(cell)}</td>`;
             }
             const cellStr = String(cell || '').trim();
@@ -634,7 +762,7 @@ function renderTable() {
                 const linksHtml = parts.map((l, i) => `<a href="${l.trim()}" target="_blank" style="color: var(--primary); font-weight: 600; text-decoration: none;">Link ${parts.length > 1 ? i + 1 : ''}</a>`.trim());
                 return `<td>${linksHtml.join(', ')}</td>`;
             }
-            return `<td>${cell || ''}</td>`;
+            return `<td>${cell !== undefined && cell !== null ? cell : ''}</td>`;
         }).join('');
 
         const sr = getDataSheetRow(row);
@@ -693,26 +821,34 @@ function filterTable() {
     let fromDateTS = -Infinity;
     let toDateTS = Infinity;
     let tkTerm = "";
+    let monthVal = "";
 
-    if (currentTab === 'DATA' || currentTab === 'DASHBOARD') {
+    if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
         const fVal = document.getElementById('fromDate')?.value;
         if (fVal) fromDateTS = new Date(fVal).setHours(0, 0, 0, 0);
         const tVal = document.getElementById('toDate')?.value;
         if (tVal) toDateTS = new Date(tVal).setHours(23, 59, 59, 999);
         tkTerm = (document.getElementById('tkFilter')?.value || "").toLowerCase();
+        monthVal = document.getElementById('monthFilter')?.value || "";
     }
 
     filteredData = allData.filter(row => {
         const matchTerm = !term ? true : row.some(cell => String(cell).toLowerCase().includes(term));
 
-        if (currentTab === 'DATA' || currentTab === 'DASHBOARD') {
+        if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
+            if (monthVal) {
+                const rowM = getRowMonth(row[1], row[11]);
+                if (rowM && rowM !== monthVal) return false;
+            }
             if (fromDateTS !== -Infinity || toDateTS !== Infinity) {
                 const rowDateTS = parseNgayForSort(row[1]);
-                if (rowDateTS < fromDateTS || rowDateTS > toDateTS) return false;
+                if (rowDateTS !== Number.NEGATIVE_INFINITY) {
+                    if (rowDateTS < fromDateTS || rowDateTS > toDateTS) return false;
+                }
             }
             if (tkTerm) {
                 const rowTk = String(row[2] || '').toLowerCase();
-                if (rowTk !== tkTerm) return false;
+                if (!rowTk.includes(tkTerm) && rowTk !== tkTerm) return false;
             }
         }
         return matchTerm;
@@ -721,13 +857,19 @@ function filterTable() {
     if (currentTab === 'DASHBOARD') {
         const filteredPay = (window._allPayData || []).filter(row => {
             const matchTerm = !term ? true : row.some(cell => String(cell).toLowerCase().includes(term));
+            if (monthVal) {
+                const rowM = getRowMonth(row[1], row[11]);
+                if (rowM && rowM !== monthVal) return false;
+            }
             if (fromDateTS !== -Infinity || toDateTS !== Infinity) {
                 const rowDateTS = parseNgayForSort(row[1]);
-                if (rowDateTS < fromDateTS || rowDateTS > toDateTS) return false;
+                if (rowDateTS !== Number.NEGATIVE_INFINITY) {
+                    if (rowDateTS < fromDateTS || rowDateTS > toDateTS) return false;
+                }
             }
             if (tkTerm) {
                 const rowTk = String(row[2] || '').toLowerCase();
-                if (rowTk !== tkTerm) return false;
+                if (!rowTk.includes(tkTerm) && rowTk !== tkTerm) return false;
             }
             return matchTerm;
         });
@@ -847,23 +989,48 @@ function openCorrectAddModal() {
     }
 }
 
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function colIndexToA1(idx) {
+    let letter = '';
+    let temp = idx;
+    while (temp >= 0) {
+        letter = String.fromCharCode((temp % 26) + 65) + letter;
+        temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
+}
+
 function openAddModalAFF(editData = null) {
     document.getElementById('addModalAFF').style.display = 'flex';
-    const title = document.querySelector('#addModalAFF h2');
-    const saveBtn = document.querySelector('#addModalAFF button[onclick="saveAddDataAFF()"]');
+    const title = document.getElementById('affModalTitle') || document.querySelector('#addModalAFF h2');
+    const saveBtn = document.getElementById('affSaveBtn') || document.querySelector('#addModalAFF button[onclick="saveAddDataAFF()"]');
+    const container = document.getElementById('addAFFFormContainer');
 
-    if (editData) {
-        title.innerText = 'Sửa TK AFF';
-        saveBtn.innerText = 'Cập Nhật';
-        document.getElementById('addAFFId').value = editData[0] || '';
-        document.getElementById('addAFFTen').value = editData[1] || '';
-        document.getElementById('addAFFMail').value = editData[2] || '';
-    } else {
-        title.innerText = 'Thêm Mới TK AFF';
-        saveBtn.innerText = 'Lưu';
-        document.getElementById('addAFFId').value = '';
-        document.getElementById('addAFFTen').value = '';
-        document.getElementById('addAFFMail').value = '';
+    const headers = (CONFIG.tabs['TK_AFF'].headers && CONFIG.tabs['TK_AFF'].headers.length > 0)
+        ? CONFIG.tabs['TK_AFF'].headers
+        : ['id', 'Tên TK', 'mail'];
+
+    title.innerText = editData ? 'Sửa TK AFF' : 'Thêm Mới TK AFF';
+    saveBtn.innerText = editData ? 'Cập Nhật' : 'Lưu';
+
+    if (container) {
+        container.innerHTML = headers.map((h, i) => {
+            const val = editData ? (editData[i] ?? '') : '';
+            return `
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: #475569;">${escapeHtml(h)} ${i === 0 ? '*' : ''}</label>
+                    <input type="text" id="affCol_${i}" class="search-input" style="width: 100%;" placeholder="Nhập ${escapeHtml(h)}..." value="${escapeHtml(val)}">
+                </div>
+            `;
+        }).join('');
     }
 }
 
@@ -873,12 +1040,13 @@ function closeAddModalAFF() {
 }
 
 async function saveAddDataAFF() {
-    const id = document.getElementById('addAFFId').value.trim();
-    const ten = document.getElementById('addAFFTen').value.trim();
-    const mail = document.getElementById('addAFFMail').value.trim();
+    const headers = (CONFIG.tabs['TK_AFF'].headers && CONFIG.tabs['TK_AFF'].headers.length > 0)
+        ? CONFIG.tabs['TK_AFF'].headers
+        : ['id', 'Tên TK', 'mail'];
+    const newRow = headers.map((_, i) => document.getElementById(`affCol_${i}`)?.value?.trim() || '');
 
-    if (!id || !ten) {
-        showToast("Vui lòng nhập ID và Tên.", "error");
+    if (newRow.length > 0 && !newRow[0]) {
+        showToast(`Vui lòng nhập ${headers[0] || 'ID'}.`, 'error');
         return;
     }
 
@@ -886,11 +1054,11 @@ async function saveAddDataAFF() {
     document.querySelector('#loading p').innerText = editingSheetRow ? `Đang cập nhật TK AFF...` : `Đang thêm TK AFF...`;
     try {
         const token = await getAccessToken();
-        const newRow = [id, ten, mail];
+        const endCol = colIndexToA1(Math.max(0, newRow.length - 1));
 
         let res;
         if (editingSheetRow) {
-            const range = `TK_AFF!A${editingSheetRow}:C${editingSheetRow}`;
+            const range = `TK_AFF!A${editingSheetRow}:${endCol}${editingSheetRow}`;
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
