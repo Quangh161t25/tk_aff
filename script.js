@@ -78,10 +78,9 @@ jWGRDHx//vnfM3DTa5v6Vxw=
             imgCol: -1
         },
         'DATA': {
-            range: 'DATA!A2:N',
-            clearRange: 'DATA!A2:N10000',
-            headers: ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang', 'ghi_chu_viec', 'ghi_chu_tiet'],
-            visibleCols: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
+            range: 'DATA!A1:ZZ',
+            clearRange: 'DATA!A2:ZZ10000',
+            headers: [],
             priceCols: [5, 6, 7, 8, 10], // hoa_hong, video, live, mxh, gmv
             imgCol: -1
         },
@@ -280,8 +279,8 @@ async function fetchData() {
         const actualSheetTitle = await getActualSheetTitle(currentTab, token);
         const tabConfig = CONFIG.tabs[currentTab];
 
-        if (currentTab === 'TK_AFF') {
-            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF / Tài Khoản
+        if (currentTab === 'TK_AFF' || currentTab === 'DATA') {
+            // Lấy toàn bộ hàng tiêu đề và các dòng dữ liệu của TK_AFF hoặc DATA
             const range = formatSheetRange(actualSheetTitle, 'A1:ZZ');
             const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -306,7 +305,10 @@ async function fetchData() {
                     headers.push(h || `Cột ${i + 1}`);
                 }
 
-                tabConfig.headers = headers.length > 0 ? headers : ['id', 'Tên TK', 'mail'];
+                const defaultHeaders = currentTab === 'TK_AFF' 
+                    ? ['id', 'Tên TK', 'mail'] 
+                    : ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
+                tabConfig.headers = headers.length > 0 ? headers : defaultHeaders;
                 const rawRows = allRows.slice(1);
                 allData = rawRows.map((row, i) => {
                     const arr = Array.isArray(row) ? row.slice() : [];
@@ -317,32 +319,58 @@ async function fetchData() {
                     return arr;
                 });
             } else {
-                tabConfig.headers = ['id', 'Tên TK', 'mail'];
+                tabConfig.headers = currentTab === 'TK_AFF' 
+                    ? ['id', 'Tên TK', 'mail'] 
+                    : ['id', 'ngay', 'tk', 'click', 'don_hang', 'hoa_hong', 'hoa_hong_video', 'hoa_hong_live', 'hoa_hong_mxh', 'luot_ban', 'gmv', 'nam_thang'];
                 allData = [];
             }
-        } else {
-            // Fetch main data
-            const range = formatSheetRange(actualSheetTitle, currentTab === 'DATA' ? 'A2:N' : currentTab === 'PAY' ? 'A2:D' : 'A2:L');
-            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
 
-            // Fetch account names for mapping if in DATA, DASHBOARD or PAY
-            let AFFNamesMap = {};
-            if (currentTab === 'DATA' || currentTab === 'DASHBOARD' || currentTab === 'PAY') {
+            // Fetch account names for mapping if in DATA
+            if (currentTab === 'DATA') {
                 try {
                     const affSheetName = await getActualSheetTitle('TK_AFF', token);
                     const affRange = formatSheetRange(affSheetName, 'A2:B');
                     const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(affRange)}`, { headers: { Authorization: `Bearer ${token}` } });
                     const AFFData = await AFFRes.json();
+                    let AFFNamesMap = {};
                     (AFFData.values || []).forEach(r => {
                         if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
                     });
                     window._AFFNamesMap = AFFNamesMap; // Cache globally
                 } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
             }
-            const rawRows = data.values || [];
+        } else {
+            // Fetch main data for DASHBOARD or PAY
+            let dataRange = 'A2:D';
+            if (currentTab === 'DASHBOARD') {
+                const dataSheetTitle = await getActualSheetTitle('DATA', token);
+                dataRange = formatSheetRange(dataSheetTitle, 'A1:ZZ');
+            } else {
+                dataRange = formatSheetRange(actualSheetTitle, 'A2:D');
+            }
+
+            const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(dataRange)}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            // Fetch account names for mapping if in DASHBOARD or PAY
+            let AFFNamesMap = {};
+            try {
+                const affSheetName = await getActualSheetTitle('TK_AFF', token);
+                const affRange = formatSheetRange(affSheetName, 'A2:B');
+                const AFFRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(affRange)}`, { headers: { Authorization: `Bearer ${token}` } });
+                const AFFData = await AFFRes.json();
+                (AFFData.values || []).forEach(r => {
+                    if (r[0]) AFFNamesMap[String(r[0]).trim()] = String(r[1] || '').trim();
+                });
+                window._AFFNamesMap = AFFNamesMap; // Cache globally
+            } catch (e) { console.warn("Không tải được tên tài khoản:", e); }
+
+            const rawRows = (currentTab === 'DASHBOARD' && (data.values || []).length > 0)
+                ? (data.values || []).slice(1)
+                : (data.values || []);
+
             allData = rawRows.map((row, i) => {
                 const arr = Array.isArray(row) ? row.slice() : [];
                 arr._sheetRow = i + 2;
@@ -1182,6 +1210,35 @@ async function openAddModal(editData = null) {
         }).filter(Boolean).join('');
         selectTk.innerHTML = `<option value="">-- Chọn TK --</option>` + opts;
 
+        const headers = CONFIG.tabs['DATA'].headers || [];
+        const extraContainer = document.getElementById('addDataExtraFieldsContainer');
+        if (extraContainer) {
+            if (headers.length > 12) {
+                extraContainer.style.display = 'grid';
+                extraContainer.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
+                extraContainer.style.gap = '10px';
+                extraContainer.style.marginTop = '10px';
+                extraContainer.style.paddingTop = '10px';
+                extraContainer.style.borderTop = '1px dashed #cbd5e1';
+
+                let extraHtml = '';
+                for (let i = 12; i < headers.length; i++) {
+                    const colName = headers[i];
+                    const val = editData ? (editData[i] ?? '') : '';
+                    extraHtml += `
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #475569; display:block; margin-bottom: 5px;">${escapeHtml(colName)}</label>
+                            <input type="text" id="addDataCol_${i}" class="search-input" style="width: 100%;" placeholder="Nhập ${escapeHtml(colName)}..." value="${escapeHtml(val)}">
+                        </div>
+                    `;
+                }
+                extraContainer.innerHTML = extraHtml;
+            } else {
+                extraContainer.innerHTML = '';
+                extraContainer.style.display = 'none';
+            }
+        }
+
         if (editData) {
             title.innerText = 'Sửa Dữ Liệu DATA';
             saveBtn.innerText = 'Cập Nhật';
@@ -1205,6 +1262,8 @@ async function openAddModal(editData = null) {
             document.getElementById('addHhMxh').value = (Number(editData[8]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
             document.getElementById('addLuotBan').value = (Number(editData[9]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
             document.getElementById('addGmv').value = (Number(editData[10]) || 0).toLocaleString('vi-VN').replace(/,/g, '.');
+            if (document.getElementById('addGhiChuViec')) document.getElementById('addGhiChuViec').value = editData[12] || '';
+            if (document.getElementById('addGhiChuTiet')) document.getElementById('addGhiChuTiet').value = editData[13] || '';
         } else {
             title.innerText = 'Thêm Mới Dữ Liệu DATA';
             saveBtn.innerText = 'Lưu';
@@ -1217,6 +1276,8 @@ async function openAddModal(editData = null) {
             document.getElementById('addHhLive').value = '';
             document.getElementById('addHhMxh').value = '';
             document.getElementById('addGmv').value = '';
+            if (document.getElementById('addGhiChuViec')) document.getElementById('addGhiChuViec').value = '';
+            if (document.getElementById('addGhiChuTiet')) document.getElementById('addGhiChuTiet').value = '';
         }
     } catch (err) {
         console.error(err);
@@ -1256,9 +1317,17 @@ function addCurrentToPending() {
     const nam_thang = `${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
     const ngayFormat = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
+    // Collect extra dynamic fields if any
+    const headers = CONFIG.tabs['DATA'].headers || [];
+    const extraValues = [];
+    for (let i = 12; i < headers.length; i++) {
+        const input = document.getElementById(`addDataCol_${i}`);
+        extraValues.push(input ? input.value : '');
+    }
+
     // Collect data object
     const entry = {
-        ngay, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang
+        ngay, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang, extraValues
     };
 
     pendingData.push(entry);
@@ -1278,6 +1347,10 @@ function addCurrentToPending() {
     document.getElementById('addHhLive').value = '';
     document.getElementById('addHhMxh').value = '';
     document.getElementById('addGmv').value = '';
+    for (let i = 12; i < headers.length; i++) {
+        const input = document.getElementById(`addDataCol_${i}`);
+        if (input) input.value = '';
+    }
 }
 
 function formatInput(el) {
@@ -1337,6 +1410,9 @@ function clearPendingData() {
 async function saveAddData() {
     const token = await getAccessToken();
     let rowsToSave = [];
+    const headers = CONFIG.tabs['DATA'].headers || [];
+    const totalCols = Math.max(headers.length, 12);
+    const lastColLetter = colIndexToA1(totalCols - 1);
 
     // Nếu có danh sách tạm chờ, ưu tiên lưu danh sách đó
     if (pendingData.length > 0 && !editingSheetRow) {
@@ -1355,9 +1431,11 @@ async function saveAddData() {
             let currentNextId = ids.length ? Math.max(...ids) + 1 : 1;
 
             rowsToSave = pendingData.map(item => {
-                const row = [currentNextId, item.ngayFormat, item.tk, item.click, item.donHang, item.hoaHong, item.hhVideo, item.hhLive, item.hhMxh, item.luotBan, item.gmv, item.nam_thang];
+                const baseRow = [currentNextId, item.ngayFormat, item.tk, item.click, item.donHang, item.hoaHong, item.hhVideo, item.hhLive, item.hhMxh, item.luotBan, item.gmv, item.nam_thang];
+                const fullRow = item.extraValues && item.extraValues.length > 0 ? baseRow.concat(item.extraValues) : baseRow;
+                while (fullRow.length < totalCols) fullRow.push('');
                 currentNextId++;
-                return row;
+                return fullRow;
             });
         } catch (e) {
             showToast("Lỗi khi lấy ID: " + e.message, "error");
@@ -1389,7 +1467,7 @@ async function saveAddData() {
         let nextId;
         if (editingSheetRow) {
             const rowData = allData.find(r => r._sheetRow === editingSheetRow);
-            nextId = rowData[0]; // Giữ ID cũ khi sửa
+            nextId = rowData ? rowData[0] : 1; // Giữ ID cũ khi sửa
         } else {
             try {
                 const actualSheetTitle = await getActualSheetTitle('DATA', token);
@@ -1401,7 +1479,17 @@ async function saveAddData() {
             } catch (e) { nextId = 1; }
         }
 
-        rowsToSave = [[nextId, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang]];
+        const extraValues = [];
+        for (let i = 12; i < headers.length; i++) {
+            const input = document.getElementById(`addDataCol_${i}`);
+            extraValues.push(input ? input.value : '');
+        }
+
+        const baseRow = [nextId, ngayFormat, tk, click, donHang, hoaHong, hhVideo, hhLive, hhMxh, luotBan, gmv, nam_thang];
+        const fullRow = extraValues.length > 0 ? baseRow.concat(extraValues) : baseRow;
+        while (fullRow.length < totalCols) fullRow.push('');
+
+        rowsToSave = [fullRow];
     }
 
     document.getElementById('loading').style.display = 'flex';
@@ -1411,7 +1499,7 @@ async function saveAddData() {
         const actualSheetTitle = await getActualSheetTitle('DATA', token);
         let res;
         if (editingSheetRow) {
-            const range = formatSheetRange(actualSheetTitle, `A${editingSheetRow}:L${editingSheetRow}`);
+            const range = formatSheetRange(actualSheetTitle, `A${editingSheetRow}:${lastColLetter}${editingSheetRow}`);
             res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, {
                 method: 'PUT',
                 headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -1441,6 +1529,7 @@ async function saveAddData() {
         document.getElementById('loading').style.display = 'none';
     }
 }
+
 
 async function openAddModalPay(editData = null) {
     document.getElementById('addModalPay').style.display = 'flex';
